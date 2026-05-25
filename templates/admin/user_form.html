@@ -1,0 +1,106 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}{{ 'Edit User' if form_user.id else 'New User' }} — Performance Partner{% endblock %}
+
+{% block admin_content %}
+<div class="max-w-xl">
+  <h1 class="text-xl font-bold text-gray-900 mb-6">
+    {{ 'Edit User' if form_user.id else 'Add User' }}
+  </h1>
+
+  <form method="post" class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
+
+    <!-- Name -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+      <input name="name" type="text" required value="{{ form_user.name or '' }}"
+             class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none
+                    {{ 'border-red-400' if errors.name else 'border-gray-300' }}"/>
+      {% if errors.name %}<p class="mt-1 text-xs text-red-600">{{ errors.name }}</p>{% endif %}
+    </div>
+
+    <!-- Email -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+      <input name="email" type="email" required value="{{ form_user.email or '' }}"
+             class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none
+                    {{ 'border-red-400' if errors.email else 'border-gray-300' }}"/>
+      {% if errors.email %}<p class="mt-1 text-xs text-red-600">{{ errors.email }}</p>{% endif %}
+    </div>
+
+    <!-- Password -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">
+        Password{% if form_user.id %} <span class="text-gray-400 font-normal">(leave blank to keep current)</span>{% endif %}
+      </label>
+      <input name="password" type="password" {{ 'required' if not form_user.id else '' }}
+             class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none
+                    {{ 'border-red-400' if errors.password else 'border-gray-300' }}"/>
+      {% if errors.password %}<p class="mt-1 text-xs text-red-600">{{ errors.password }}</p>{% endif %}
+    </div>
+
+    <!-- Role + Department row -->
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+        <select name="role"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                       focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          {% for r in roles %}
+          <option value="{{ r }}" {{ 'selected' if form_user.role == r else '' }}>
+            {{ r | title }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Department</label>
+        <select name="department"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                       focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <option value="">— None —</option>
+          {% for d in departments %}
+          <option value="{{ d }}" {{ 'selected' if form_user.department == d else '' }}>{{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Manager -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Manager</label>
+      <select name="manager_id"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                     focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <option value="">— No manager —</option>
+        {% for m in managers %}
+        <option value="{{ m.id }}"
+                {{ 'selected' if form_user.manager_id == m.id else '' }}>
+          {{ m.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Active toggle (edit only) -->
+    {% if form_user.id %}
+    <div class="flex items-center gap-2">
+      <input id="is_active" name="is_active" type="checkbox" value="1"
+             {{ 'checked' if form_user.is_active else '' }}
+             class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
+      <label for="is_active" class="text-sm text-gray-700">Account is active</label>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium
+                     px-5 py-2 rounded-lg transition-colors">
+        {{ 'Save Changes' if form_user.id else 'Create User' }}
+      </button>
+      <a href="/admin/users" class="text-sm text-gray-500 hover:text-gray-700">Cancel</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

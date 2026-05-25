@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}Report: {{ subject.name }} — {{ cycle.name }} — Performance Partner{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  .bar-track { height: 8px; background: #f1f5f9; border-radius: 9999px; overflow: hidden; }
+  .rel-self    { color: rgb(99,102,241); }
+  .rel-manager { color: rgb(16,185,129); }
+  .rel-peer    { color: rgb(245,158,11); }
+  .rel-report  { color: rgb(239,68,68); }
+  details > summary { cursor: pointer; list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Breadcrumb + header -->
+  <div class="flex items-start justify-between gap-4 flex-wrap">
+    <div>
+      <div class="flex items-center gap-2 text-sm text-gray-400 mb-1">
+        {% if is_admin %}
+        <a href="/admin/cycles/{{ cycle.id }}/progress" class="hover:text-gray-600">{{ cycle.name }}</a>
+        {% else %}
+        <a href="/dashboard" class="hover:text-gray-600">Dashboard</a>
+        {% endif %}
+        <span>/</span>
+        <span class="text-gray-600">{{ subject.name }}</span>
+      </div>
+      <h1 class="text-2xl font-bold text-gray-900">{{ subject.name }}</h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        360° Report &middot; {{ cycle.name }}
+        <span class="ml-2 inline-block px-2 py-0.5 rounded-full text-xs font-medium border
+          {% if cycle.status == 'active' %}bg-green-50 text-green-700 border-green-200
+          {% elif cycle.status == 'closed' %}bg-gray-100 text-gray-500 border-gray-200
+          {% else %}bg-yellow-50 text-yellow-700 border-yellow-200{% endif %}">
+          {{ cycle.status | title }}
+        </span>
+      </p>
+    </div>
+  </div>
+
+  <!-- Summary bar -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-wrap gap-6">
+    {% for rel in rel_order %}
+    {% if rel_counts.get(rel) %}
+    <div>
+      <p class="text-xl font-bold rel-{{ rel }}">{{ rel_counts[rel] }}</p>
+      <p class="text-xs text-gray-500 mt-0.5">{{ rel | relationship_label }} evaluation{{ 's' if rel_counts[rel] != 1 else '' }}</p>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if radar_datasets %}
+  <!-- Radar chart -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Overview by Category</h2>
+    <canvas id="radarChart"></canvas>
+    <div class="flex flex-wrap justify-center gap-4 mt-4">
+      {% for ds in radar_datasets %}
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-full inline-block" style="background: {{ ds.borderColor }}"></span>
+        <span class="text-xs text-gray-600">{{ ds.label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Per-category question breakdown -->
+  {% if by_category %}
+  <div class="space-y-4">
+    <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Question Breakdown</h2>
+    {% for cat in categories %}
+    {% if cat in by_category %}
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <h3 class="font-semibold text-gray-900 mb-4">{{ cat }}</h3>
+      <div class="space-y-5">
+        {% for q in by_category[cat] %}
+        <div>
+          <p class="text-sm text-gray-700 mb-2">{{ q.text }}</p>
+          <div class="space-y-1.5">
+            {% for rel in rel_order %}
+            {% if q.rels.get(rel) is not none %}
+            {% set avg = q.rels[rel] %}
+            <div class="flex items-center gap-3">
+              <span class="w-16 text-xs text-right rel-{{ rel }} font-medium capitalize">{{ rel }}</span>
+              <div class="flex-1 bar-track">
+                <div class="h-full rounded-full transition-all"
+                     style="width: {{ (avg / 5 * 100) | int }}%;
+                            background: {{ rel_colors[rel].border }};
+                            opacity: 0.7;">
+                </div>
+              </div>
+              <span class="w-8 text-xs text-gray-600 font-medium">{{ avg }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if not radar_datasets and not by_category %}
+  <div class="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+    <p class="text-gray-400 text-sm">No ratings data yet for this report.</p>
+    <p class="text-xs text-gray-400 mt-1">Ratings are captured during evaluations as they're completed.</p>
+  </div>
+  {% endif %}
+
+  <!-- Interview Transcripts -->
+  {% if transcripts %}
+  <div class="space-y-3">
+    <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Interview Transcripts</h2>
+    {% for t in transcripts %}
+    <details class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden group">
+      <summary class="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors">
+        <div class="flex items-center gap-2">
+          <span class="font-medium text-gray-800 text-sm">{{ t.label }}</span>
+          <span class="text-xs text-gray-400 capitalize px-2 py-0.5 bg-gray-100 rounded-full rel-{{ t.relationship }}">
+            {{ t.relationship }}
+          </span>
+        </div>
+        <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </summary>
+      <div class="border-t border-gray-100 px-5 py-4 space-y-3 max-h-96 overflow-y-auto">
+        {% for turn in t.turns %}
+        {% if turn.role == 'assistant' %}
+        <div class="flex gap-3">
+          <span class="text-xs font-medium text-indigo-500 w-16 flex-shrink-0 pt-0.5">Claude</span>
+          <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ turn.content }}</p>
+        </div>
+        {% else %}
+        <div class="flex gap-3">
+          <span class="text-xs font-medium text-gray-400 w-16 flex-shrink-0 pt-0.5">
+            {% if t.relationship == 'self' %}You{% else %}Evaluator{% endif %}
+          </span>
+          <p class="text-sm text-gray-800 whitespace-pre-wrap">{{ turn.content }}</p>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+{% if radar_datasets %}
+const ctx = document.getElementById('radarChart').getContext('2d');
+new Chart(ctx, {
+  type: 'radar',
+  data: {
+    labels: {{ categories | tojson }},
+    datasets: {{ radar_datasets | tojson }},
+  },
+  options: {
+    responsive: true,
+    scales: {
+      r: {
+        min: 0,
+        max: 5,
+        ticks: { stepSize: 1, font: { size: 10 } },
+        pointLabels: {
+          font: { size: 13 },
+          callback: function(label) {
+            const shorts = {
+              'Productivity & Technical Knowledge': 'Productivity',
+              'Interest, Motivation & Initiative': 'Motivation & Initiative',
+              'Attendance, Punctuality & Dependability': 'Attendance',
+              'Cooperation & Teamwork': 'Cooperation',
+              'Judgment & Decision-Making': 'Judgment',
+              'Communication Skills': 'Communication',
+            };
+            return shorts[label] || label;
+          }
+        },
+        grid: { color: 'rgba(0,0,0,0.06)' },
+      }
+    },
+    plugins: {
+      legend: { display: false },
+    },
+  }
+});
+{% endif %}
+</script>
+{% endblock %}

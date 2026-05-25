@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}Evaluation: {{ evaluee.name }} — Performance Partner{% endblock %}
+
+{% block head %}
+<style>
+  #chat-messages { scroll-behavior: smooth; }
+  .bubble-claude { background: #f1f5f9; border-radius: 1rem 1rem 1rem 0.25rem; }
+  .bubble-user   { background: #4f46e5; color: white; border-radius: 1rem 1rem 0.25rem 1rem; }
+  .typing-dot { animation: bounce 1.2s infinite; }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40% { transform: translateY(-6px); opacity: 1; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col" style="height: calc(100vh - 8rem);">
+
+  <!-- Header -->
+  <div class="flex items-center gap-3 mb-4 flex-shrink-0">
+    <a href="/dashboard" class="text-sm text-gray-400 hover:text-gray-600">Dashboard</a>
+    <span class="text-gray-300">/</span>
+    <h1 class="text-lg font-semibold text-gray-900">
+      Evaluation: <span class="text-indigo-600">{{ evaluee.name }}</span>
+    </h1>
+    <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full capitalize">
+      {{ assignment.relationship }}
+    </span>
+  </div>
+
+  <!-- Chat window -->
+  <div id="chat-messages"
+       class="flex-1 overflow-y-auto bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-4 mb-4">
+
+    {% if not fresh %}
+      {% for t in turns %}
+        {% if t.role == 'assistant' %}
+        <div class="flex gap-3 items-end">
+          <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600 text-xs font-bold">AI</div>
+          <div class="bubble-claude px-4 py-3 text-sm text-gray-800 max-w-xl whitespace-pre-wrap">{{ t.content }}</div>
+        </div>
+        {% elif not t.content.startswith('RATING:') %}
+        <div class="flex gap-3 items-end justify-end">
+          <div class="bubble-user px-4 py-3 text-sm max-w-xl whitespace-pre-wrap">{{ t.content }}</div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+
+    <!-- Typing indicator (hidden by default) -->
+    <div id="typing-indicator" class="flex gap-3 items-end hidden">
+      <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600 text-xs font-bold">AI</div>
+      <div class="bubble-claude px-4 py-3 flex gap-1 items-center">
+        <span class="typing-dot w-2 h-2 bg-gray-400 rounded-full inline-block"></span>
+        <span class="typing-dot w-2 h-2 bg-gray-400 rounded-full inline-block"></span>
+        <span class="typing-dot w-2 h-2 bg-gray-400 rounded-full inline-block"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input area -->
+  <div id="input-area" class="flex-shrink-0">
+    {% if fresh %}
+    <!-- Fresh interview: just a start button -->
+    <div class="text-center py-4">
+      <p class="text-sm text-gray-500 mb-3">
+        You're about to evaluate <strong>{{ evaluee.name }}</strong>.
+        Click below when you're ready to begin.
+      </p>
+      <button onclick="startInterview()"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2.5 rounded-lg transition-colors">
+        Begin Evaluation
+      </button>
+    </div>
+    {% else %}
+    <!-- Continue: show text input -->
+    <div class="flex gap-3">
+      <textarea id="user-input"
+                rows="2"
+                placeholder="Type your response…"
+                class="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm resize-none
+                       focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+      <button onclick="sendMessage()"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2 rounded-xl
+                     self-end transition-colors">
+        Send
+      </button>
+    </div>
+    <p class="text-xs text-gray-400 mt-1 text-right">Press Enter to send, Shift+Enter for new line</p>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Completed overlay (shown when interview finishes) -->
+<div id="completed-overlay" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+  <div class="bg-white rounded-2xl shadow-xl p-8 max-w-sm text-center">
+    <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <svg class="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      </svg>
+    </div>
+    <h2 class="text-xl font-bold text-gray-900 mb-2">Evaluation Complete</h2>
+    <p class="text-sm text-gray-500 mb-6">
+      Thank you for completing the evaluation of <strong>{{ evaluee.name }}</strong>.
+    </p>
+    <a href="/dashboard"
+       class="block bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2.5 rounded-lg transition-colors">
+      Back to Dashboard
+    </a>
+  </div>
+</div>
+
+<script>
+const ASSIGNMENT_ID = {{ assignment.id }};
+const EVALUEE_NAME = {{ evaluee.name | tojson }};
+
+function scrollToBottom() {
+  const el = document.getElementById('chat-messages');
+  el.scrollTop = el.scrollHeight;
+}
+
+function showTyping() {
+  document.getElementById('typing-indicator').classList.remove('hidden');
+  scrollToBottom();
+}
+
+function hideTyping() {
+  document.getElementById('typing-indicator').classList.add('hidden');
+}
+
+function appendClaudeMessage(text, ratingIds) {
+  const container = document.getElementById('chat-messages');
+
+  // Remove typing indicator from its position, re-append at end after message
+  const typing = document.getElementById('typing-indicator');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'flex gap-3 items-end';
+  wrap.innerHTML = `
+    <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600 text-xs font-bold">AI</div>
+    <div class="bubble-claude px-4 py-3 text-sm text-gray-800 max-w-xl whitespace-pre-wrap">${escHtml(text)}</div>
+  `;
+  container.insertBefore(wrap, typing);
+
+  // Render rating buttons for each question id
+  ratingIds.forEach(qid => {
+    const rated = ratedQuestions[qid];
+    const btnRow = document.createElement('div');
+    btnRow.className = 'flex gap-3 items-end pl-10';
+    btnRow.id = `ratings-${qid}`;
+    let btns = '';
+    for (let v = 1; v <= 5; v++) {
+      const active = rated == v ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-indigo-50';
+      btns += `<button onclick="submitRating(${qid}, ${v})" data-qid="${qid}" data-val="${v}"
+                       class="rating-btn w-9 h-9 rounded-full border border-gray-200 text-sm font-medium transition-all ${active}">
+                 ${v}
+               </button>`;
+    }
+    btnRow.innerHTML = `<div class="flex gap-2 mt-1">${btns}</div>`;
+    container.insertBefore(btnRow, typing);
+  });
+
+  scrollToBottom();
+}
+
+function appendUserMessage(text) {
+  const container = document.getElementById('chat-messages');
+  const typing = document.getElementById('typing-indicator');
+  const wrap = document.createElement('div');
+  wrap.className = 'flex gap-3 items-end justify-end';
+  wrap.innerHTML = `<div class="bubble-user px-4 py-3 text-sm max-w-xl whitespace-pre-wrap">${escHtml(text)}</div>`;
+  container.insertBefore(wrap, typing);
+  scrollToBottom();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function showInputArea() {
+  const area = document.getElementById('input-area');
+  area.innerHTML = `
+    <div class="flex gap-3">
+      <textarea id="user-input" rows="2" placeholder="Type your response…"
+                class="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm resize-none
+                       focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+      <button onclick="sendMessage()"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2 rounded-xl self-end transition-colors">
+        Send
+      </button>
+    </div>
+    <p class="text-xs text-gray-400 mt-1 text-right">Press Enter to send, Shift+Enter for new line</p>
+  `;
+  document.getElementById('user-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+  document.getElementById('user-input').focus();
+}
+
+async function callClaude(message) {
+  showTyping();
+  const resp = await fetch(`/eval/${ASSIGNMENT_ID}/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+  hideTyping();
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    appendClaudeMessage(`Sorry, something went wrong. ${err.error || ''}`, []);
+    return;
+  }
+
+  const data = await resp.json();
+  appendClaudeMessage(data.reply, data.rating_ids || []);
+
+  if (data.completed) {
+    setTimeout(() => {
+      document.getElementById('completed-overlay').classList.remove('hidden');
+    }, 800);
+    document.getElementById('input-area').innerHTML = '';
+  }
+}
+
+async function startInterview() {
+  document.getElementById('input-area').innerHTML = '<p class="text-center text-sm text-gray-400 py-2">Starting…</p>';
+  await callClaude('__START__');
+  showInputArea();
+}
+
+async function sendMessage() {
+  const input = document.getElementById('user-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.disabled = true;
+
+  appendUserMessage(text);
+  await callClaude(text);
+
+  if (input.isConnected) {
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+async function submitRating(qid, value) {
+  // Update UI immediately
+  ratedQuestions[qid] = value;
+  const row = document.getElementById(`ratings-${qid}`);
+  if (row) {
+    row.querySelectorAll('.rating-btn').forEach(btn => {
+      const v = parseInt(btn.dataset.val);
+      if (v === value) {
+        btn.className = btn.className.replace(/bg-white text-gray-700 hover:bg-indigo-50/g, '')
+                         + ' ring-2 ring-indigo-400 bg-indigo-600 text-white';
+      } else {
+        btn.className = btn.className.replace(/ring-2 ring-indigo-400 bg-indigo-600 text-white/g, '')
+                                     .replace(/bg-indigo-600/g, 'bg-white')
+                         + ' text-gray-700 hover:bg-indigo-50';
+      }
+    });
+  }
+
+  // Disable rating buttons while Claude responds
+  if (row) row.querySelectorAll('.rating-btn').forEach(b => b.disabled = true);
+
+  // Send as RATING: message
+  const ratingMsg = `RATING:${qid}:${value}`;
+  await callClaude(ratingMsg);
+
+  // Re-enable buttons
+  if (row) row.querySelectorAll('.rating-btn').forEach(b => b.disabled = false);
+}
+
+// Rated questions map (pre-populated from server)
+const ratedQuestions = {{ rated_ids | tojson }};
+
+// Key handler for textarea in non-fresh state
+document.addEventListener('DOMContentLoaded', () => {
+  scrollToBottom();
+  const input = document.getElementById('user-input');
+  if (input) {
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+  }
+});
+</script>
+{% endblock %}

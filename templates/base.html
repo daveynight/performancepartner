@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Performance Partner{% endblock %}</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { brand: { DEFAULT: '#4f46e5', dark: '#3730a3', light: '#818cf8' } }
+        }
+      }
+    }
+  </script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="bg-slate-50 min-h-screen text-gray-900 antialiased">
+
+  {% if user %}
+  <nav class="bg-indigo-800 shadow">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <a href="/dashboard" class="flex items-center gap-2">
+          <img src="/static/logo.png" alt="Partners In Care" class="h-8 w-8 rounded-full"/>
+          <span class="text-white font-semibold tracking-tight text-base">Performance Partner</span>
+        </a>
+        <a href="/dashboard"
+           class="text-indigo-200 hover:text-white text-sm font-medium transition-colors">
+          Dashboard
+        </a>
+        {% if user.role in ('admin', 'manager') %}
+        <a href="/admin/cycles"
+           class="text-indigo-200 hover:text-white text-sm font-medium transition-colors">
+          Admin
+        </a>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="text-indigo-300 text-sm">{{ user.name }}</span>
+        <a href="/logout"
+           class="text-indigo-200 hover:text-white text-sm font-medium transition-colors">
+          Sign out
+        </a>
+      </div>
+    </div>
+  </nav>
+  {% endif %}
+
+  {% if request.query_params.get('success') %}
+  <div class="bg-green-50 border-b border-green-200">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-2 text-green-800 text-sm">
+      <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+      </svg>
+      {{ request.query_params.get('success') }}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if request.query_params.get('error') %}
+  <div class="bg-red-50 border-b border-red-200">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-2 text-red-800 text-sm">
+      <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-9v4a1 1 0 002 0V9a1 1 0 00-2 0zm0-4a1 1 0 112 0 1 1 0 01-2 0z" clip-rule="evenodd"/>
+      </svg>
+      {{ request.query_params.get('error') }}
+    </div>
+  </div>
+  {% endif %}
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+</body>
+</html>

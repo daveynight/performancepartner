@@ -1,0 +1,204 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}{{ 'Edit Cycle' if cycle.id else 'New Cycle' }} — Performance Partner{% endblock %}
+
+{% block admin_content %}
+<div class="max-w-2xl">
+  <h1 class="text-xl font-bold text-gray-900 mb-6">
+    {{ 'Edit Cycle' if cycle.id else 'New Evaluation Cycle' }}
+  </h1>
+
+  <form method="post" class="space-y-6">
+
+    <!-- Name + dates card -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
+      <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Details</h2>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Cycle Name</label>
+        <input name="name" type="text" required value="{{ cycle.name or '' }}"
+               placeholder="e.g. 2024 Annual Review"
+               class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none
+                      {{ 'border-red-400' if errors.name else 'border-gray-300' }}"/>
+        {% if errors.name %}<p class="mt-1 text-xs text-red-600">{{ errors.name }}</p>{% endif %}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+        <textarea name="description" rows="2"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                         focus:ring-2 focus:ring-indigo-500 focus:outline-none">{{ cycle.description or '' }}</textarea>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+          <input name="start_date" type="date" value="{{ cycle.start_date or '' }}"
+                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                        focus:ring-2 focus:ring-indigo-500 focus:outline-none"/>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+          <input name="end_date" type="date" value="{{ cycle.end_date or '' }}"
+                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                        focus:ring-2 focus:ring-indigo-500 focus:outline-none"/>
+        </div>
+      </div>
+    </div>
+
+    {% if cycle.status != 'active' %}
+    <!-- Draft: checkbox participant picker -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Participants</h2>
+        <div class="flex gap-3">
+          <button type="button" onclick="setAll(true)"
+                  class="text-xs text-indigo-600 hover:underline">Select all</button>
+          <button type="button" onclick="setAll(false)"
+                  class="text-xs text-gray-400 hover:underline">Clear all</button>
+        </div>
+      </div>
+
+      {% if all_users %}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {% for u in all_users %}
+        <label class="flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer
+                      hover:bg-gray-50 transition-colors
+                      {{ 'border-indigo-300 bg-indigo-50' if u.id in selected_ids else 'border-gray-200' }}">
+          <input type="checkbox" name="participants" value="{{ u.id }}"
+                 {{ 'checked' if u.id in selected_ids else '' }}
+                 class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500
+                        participant-cb"/>
+          <span class="flex-1 min-w-0">
+            <span class="text-sm font-medium text-gray-900 block truncate">{{ u.name }}</span>
+            {% if u.department %}
+            <span class="text-xs text-gray-400">{{ u.department }}</span>
+            {% endif %}
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-gray-400">
+        No active users yet.
+        <a href="/admin/users/new" class="text-indigo-600 hover:underline">Add users first.</a>
+      </p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Actions (name/dates form) -->
+    <div class="flex items-center gap-3">
+      <button type="submit"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium
+                     px-5 py-2 rounded-lg transition-colors">
+        {{ 'Save Changes' if cycle.id else 'Create Cycle' }}
+      </button>
+      <a href="/admin/cycles" class="text-sm text-gray-500 hover:text-gray-700">Cancel</a>
+    </div>
+
+  </form>
+</div>
+
+{% if cycle.status == 'active' %}
+<!-- Active cycle: manage participants outside the main form -->
+<div class="max-w-2xl mt-6 space-y-4">
+
+  <!-- Current participants -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Current Participants</h2>
+    {% if participants %}
+    <div class="divide-y divide-gray-100">
+      {% for p in participants %}
+      <div class="flex items-center justify-between py-2.5">
+        <div>
+          <span class="text-sm font-medium text-gray-900">{{ p.name }}</span>
+          {% if p.department %}
+          <span class="ml-2 text-xs text-gray-400">{{ p.department }}</span>
+          {% endif %}
+        </div>
+        <form method="post" action="/admin/cycles/{{ cycle.id }}/participants/remove"
+              onsubmit="return confirmRemove(event, {{ p.name | tojson }}, {{ p.completed_count }})">
+          <input type="hidden" name="user_id" value="{{ p.id }}"/>
+          <button type="submit"
+                  class="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1
+                         rounded border border-red-200 hover:border-red-400 transition-colors">
+            Remove
+          </button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-400">No participants.</p>
+    {% endif %}
+  </div>
+
+  <!-- Add participants -->
+  {% if available_users %}
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Add Participants</h2>
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/participants/add">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+        {% for u in available_users %}
+        <label class="flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer
+                      hover:bg-gray-50 transition-colors border-gray-200 add-participant-label">
+          <input type="checkbox" name="user_id" value="{{ u.id }}"
+                 class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500
+                        add-cb"/>
+          <span class="flex-1 min-w-0">
+            <span class="text-sm font-medium text-gray-900 block truncate">{{ u.name }}</span>
+            {% if u.department %}
+            <span class="text-xs text-gray-400">{{ u.department }}</span>
+            {% endif %}
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+      <button type="submit"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium
+                     px-4 py-2 rounded-lg transition-colors">
+        Add Selected
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}
+
+<script>
+function setAll(checked) {
+  document.querySelectorAll('.participant-cb').forEach(cb => {
+    cb.checked = checked;
+    cb.closest('label').classList.toggle('border-indigo-300', checked);
+    cb.closest('label').classList.toggle('bg-indigo-50', checked);
+    cb.closest('label').classList.toggle('border-gray-200', !checked);
+  });
+}
+document.querySelectorAll('.participant-cb').forEach(cb => {
+  cb.addEventListener('change', function() {
+    this.closest('label').classList.toggle('border-indigo-300', this.checked);
+    this.closest('label').classList.toggle('bg-indigo-50', this.checked);
+    this.closest('label').classList.toggle('border-gray-200', !this.checked);
+  });
+});
+document.querySelectorAll('.add-cb').forEach(cb => {
+  cb.addEventListener('change', function() {
+    this.closest('label').classList.toggle('border-indigo-300', this.checked);
+    this.closest('label').classList.toggle('bg-indigo-50', this.checked);
+    this.closest('label').classList.toggle('border-gray-200', !this.checked);
+  });
+});
+function confirmRemove(event, name, completedCount) {
+  let msg = `Remove ${name} from this cycle?`;
+  if (completedCount > 0) {
+    msg += `\n\nWarning: this will permanently delete ${completedCount} completed evaluation(s) involving ${name}.`;
+  }
+  if (!confirm(msg)) {
+    event.preventDefault();
+    return false;
+  }
+  return true;
+}
+</script>
+{% endblock %}

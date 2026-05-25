@@ -1,0 +1,109 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}{{ 'Edit Question' if form_q.id else 'New Question' }} — Performance Partner{% endblock %}
+
+{% block admin_content %}
+<div class="max-w-xl">
+  <h1 class="text-xl font-bold text-gray-900 mb-6">
+    {{ 'Edit Question' if form_q.id else 'Add Question' }}
+  </h1>
+
+  <form method="post" class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
+
+    <!-- Category -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Category / Section</label>
+      <input name="category" type="text" required value="{{ form_q.category or '' }}"
+             placeholder="e.g. Communication Skills"
+             class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none
+                    {{ 'border-red-400' if errors.category else 'border-gray-300' }}"/>
+      {% if errors.category %}<p class="mt-1 text-xs text-red-600">{{ errors.category }}</p>{% endif %}
+    </div>
+
+    <!-- Text -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Question Text</label>
+      <textarea name="text" rows="3" required
+                class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none
+                       {{ 'border-red-400' if errors.text else 'border-gray-300' }}">{{ form_q.text or '' }}</textarea>
+      {% if errors.text %}<p class="mt-1 text-xs text-red-600">{{ errors.text }}</p>{% endif %}
+    </div>
+
+    <!-- Type + Scope row -->
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Answer Type</label>
+        <select name="question_type"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                       focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          {% for qt in qtypes %}
+          <option value="{{ qt }}" {{ 'selected' if form_q.question_type == qt else '' }}>
+            {{ qt | qtype_label }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Scope</label>
+        <select name="scope" id="scopeSelect"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                       focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          {% for s in scopes %}
+          <option value="{{ s }}" {{ 'selected' if form_q.scope == s else '' }}>
+            {{ s | scope_label }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Department (shown only when scope = dept_specific) -->
+    <div id="deptRow" class="{{ '' if form_q.scope == 'dept_specific' else 'hidden' }}">
+      <label class="block text-sm font-medium text-gray-700 mb-1">Department</label>
+      <select name="department"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                     focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <option value="">— Select —</option>
+        {% for d in departments %}
+        <option value="{{ d }}" {{ 'selected' if form_q.department == d else '' }}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Order index -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Display Order</label>
+      <input name="order_index" type="number" value="{{ form_q.order_index or 0 }}"
+             class="w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm
+                    focus:ring-2 focus:ring-indigo-500 focus:outline-none"/>
+      <p class="mt-1 text-xs text-gray-400">Lower numbers appear first. Sections use 100s (e.g. 101, 201).</p>
+    </div>
+
+    <!-- Active (edit only) -->
+    {% if form_q.id %}
+    <div class="flex items-center gap-2">
+      <input id="is_active" name="is_active" type="checkbox" value="1"
+             {{ 'checked' if form_q.is_active else '' }}
+             class="h-4 w-4 rounded border-gray-300 text-indigo-600"/>
+      <label for="is_active" class="text-sm text-gray-700">Question is active</label>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium
+                     px-5 py-2 rounded-lg transition-colors">
+        {{ 'Save Changes' if form_q.id else 'Add Question' }}
+      </button>
+      <a href="/admin/questions" class="text-sm text-gray-500 hover:text-gray-700">Cancel</a>
+    </div>
+
+  </form>
+</div>
+
+<script>
+  document.getElementById('scopeSelect').addEventListener('change', function() {
+    document.getElementById('deptRow').classList.toggle('hidden', this.value !== 'dept_specific');
+  });
+</script>
+{% endblock %}

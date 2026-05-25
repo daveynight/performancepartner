@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Report: {{ subject.name }} — Performance Partner{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto text-center py-16">
+  <h1 class="text-xl font-bold text-gray-900 mb-2">{{ subject.name }}</h1>
+  <p class="text-sm text-gray-500 mb-1">{{ cycle.name }}</p>
+  <p class="text-gray-400 text-sm mt-6">No completed evaluations yet for this person in this cycle.</p>
+  <a href="/admin/cycles/{{ cycle.id }}/progress"
+     class="mt-6 inline-block text-indigo-600 hover:underline text-sm">
+    Back to Progress
+  </a>
+</div>
+{% endblock %}

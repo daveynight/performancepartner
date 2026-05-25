@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="mb-6 border-b border-gray-200">
+  <nav class="flex gap-1">
+    {% set tabs = [("users","Users","/admin/users"),("questions","Questions","/admin/questions"),("cycles","Cycles","/admin/cycles")] %}
+    {% for key, label, href in tabs %}
+    <a href="{{ href }}"
+       class="px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors
+              {% if active_tab == key %}
+                border-indigo-600 text-indigo-700 bg-white
+              {% else %}
+                border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300
+              {% endif %}">
+      {{ label }}
+    </a>
+    {% endfor %}
+  </nav>
+</div>
+
+{% block admin_content %}{% endblock %}
+{% endblock %}
