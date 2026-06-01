@@ -98,51 +98,63 @@ Relationship: {rel}
     prompt += f"""
 ## Interview Instructions
 
-Conduct the interview section by section. For each section:
-1. Introduce the section warmly (e.g., "Let's talk about {evaluee_name}'s Communication Skills.")
-2. For each Likert question in the section:
-   - Ask it conversationally (rephrase naturally, don't read it robotically)
-   - End your message with exactly: [SHOW_RATINGS:{{question_id}}]
-   - Wait for the rating response before moving on
-3. After all ratings in a section, ask:
-   - "What did {evaluee_name} do particularly well in this area?"
-   - "Where could {evaluee_name} improve?"
+Conduct the interview section by section:
+1. Introduce each section warmly (e.g., "Let's talk about {evaluee_name}'s Communication Skills.")
+2. Work through all questions in the section using the rules below.
+3. After all SHOW_RATINGS questions in a section, ask the two section wrap-up questions (see below).
 4. Transition smoothly to the next section.
 
-For text/comment questions (question_type = "text"): Ask them as open-ended questions without rating buttons.
-For goal questions (question_type = "goal"): Ask them as open-ended questions, one at a time.
+---
 
-## Probing for specifics — IMPORTANT
+## RULE 1 — Questions prefixed → SHOW_RATINGS:N (rating questions)
 
-After ANY open-ended text response (the "did well", "could improve", comment questions, goal questions):
-- If the answer is vague, short, or generic — e.g., "really well", "they do fine", "could be better",
-  "not really", "yes", "good", "hard to say" — you MUST ask a follow-up probe before moving on.
-- A good probe asks for a concrete example or situation:
-  e.g., "That's helpful — can you think of a specific situation where you saw that?"
-  or "Can you give me an example of what that looks like day-to-day?"
-- Ask the probe only ONCE. If the second answer is still vague or the evaluator says they can't
-  think of an example, accept it gracefully and move on. Never ask the same probe a third time.
-- A response counts as specific enough if it names a project, event, behavior, or concrete outcome.
-  If it does, move on without probing.
+- Rephrase the question naturally and conversationally — don't read it verbatim.
+- Your message MUST end with exactly `[SHOW_RATINGS:N]` where N is the number in the prefix.
+  Example: if the prefix is `→ SHOW_RATINGS:7`, end your message with `[SHOW_RATINGS:7]`.
+- The evaluator will respond with a message like `RATING:N:value` (e.g. `RATING:7:3`).
+- **If the value is 4 or 5**: acknowledge briefly (e.g. "Great, thanks.") and ask the next question.
+- **If the value is 3 or lower**: acknowledge, then ask ONE follow-up to understand why
+  (e.g. "That's a 2 — can you tell me a bit more about what's been challenging there?").
+  After their response (specific or not), move on. Never probe a second time on the same rating.
+- NEVER ask the evaluator to verbalize or describe their rating instead of clicking — always wait
+  for the `RATING:N:value` message.
+- NEVER emit `[SHOW_RATINGS:N]` for any question that is not prefixed → SHOW_RATINGS.
+
+---
+
+## RULE 2 — Questions prefixed → OPEN_TEXT:N or → OPEN_GOAL:N (open-ended questions)
+
+- Ask as a warm, open-ended question. Do NOT include `[SHOW_RATINGS:N]` in your message.
+- If the answer is vague or generic (e.g. "fine", "good", "not sure", "they do okay"),
+  ask ONE follow-up probe for a specific example or situation.
+- If the second response is still vague, or the evaluator signals they have nothing more to add,
+  accept it gracefully and move on. Never probe a third time.
+- If the answer already names a project, event, behavior, or concrete outcome, it is specific
+  enough — move on without probing.
+
+---
+
+## Section wrap-up (after all SHOW_RATINGS questions in a section)
+
+Ask these two questions as plain open-ended questions — no rating buttons, follow RULE 2:
+- "What did {evaluee_name} do particularly well in this area?"
+- "Where could {evaluee_name} improve in this area?"
+
+---
 
 ## Tone
 - Warm, professional, and encouraging
-- Keep it conversational — this is an interview, not a form
-- Never rush the evaluator; thank them for thoughtful responses
-- If they give a rating, acknowledge it briefly before moving on
+- Conversational — this is an interview, not a form
+- Thank the evaluator for thoughtful responses; never rush them
 
 ## Completion
-When ALL sections are complete and you've collected all required ratings and responses, say a warm
-thank-you and end your final message with exactly: [INTERVIEW_COMPLETE]
+When ALL sections and wrap-up questions are complete, say a warm thank-you and end your
+final message with exactly: [INTERVIEW_COMPLETE]
 
-## Rating Messages
-When the evaluator clicks a rating button, you will receive a message like:
-  RATING:{{question_id}}:{{value}}
-Acknowledge the rating briefly (e.g., "Got it, a 4 — thanks.") and continue with the next question.
-
-When you receive the message "__START__", that means the evaluator just clicked "Begin Evaluation."
-Respond by introducing yourself warmly, explaining the purpose, and starting with scoping questions
-(if peer) or directly with the first section's introduction and first question.
+## Special messages
+- `RATING:N:value` — a rating button was clicked; handle per RULE 1 above.
+- `__START__` — the evaluator just clicked "Begin Evaluation." Introduce yourself warmly,
+  explain the purpose, then begin with scoping questions (if peer) or the first section directly.
 """
     return prompt
 
@@ -157,7 +169,13 @@ def _format_questions_by_category(questions: list[dict]) -> str:
     for cat, qs in by_cat.items():
         lines.append(f"### {cat}")
         for q in qs:
-            lines.append(f"  - [ID:{q['id']}] [{q['question_type']}] {q['text']}")
+            if q["question_type"] == "likert":
+                prefix = f"→ SHOW_RATINGS:{q['id']}"
+            elif q["question_type"] == "goal":
+                prefix = f"→ OPEN_GOAL:{q['id']}"
+            else:
+                prefix = f"→ OPEN_TEXT:{q['id']}"
+            lines.append(f"  {prefix:<22} {q['text']}")
     return "\n".join(lines)
 
 
