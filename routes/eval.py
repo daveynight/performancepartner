@@ -23,6 +23,19 @@ def _load_questions(conn) -> list[dict]:
         ())
 
 
+def _current_rating_question_id(conn, assignment_id: int) -> int | None:
+    all_likert = fetchall(conn,
+        "SELECT id FROM questions WHERE question_type='likert' AND is_active=1 ORDER BY order_index",
+        ())
+    rated = {r["question_id"] for r in fetchall(conn,
+        "SELECT question_id FROM responses WHERE assignment_id=? AND rating IS NOT NULL",
+        (assignment_id,))}
+    for q in all_likert:
+        if q["id"] not in rated:
+            return q["id"]
+    return None
+
+
 def _load_turns(conn, assignment_id: int) -> list[dict]:
     return fetchall(conn,
         "SELECT role, content FROM conversation_turns WHERE assignment_id = ? ORDER BY id",
@@ -121,9 +134,15 @@ async def eval_message(assignment_id: int, request: Request):
         system_prompt = build_system_prompt(a, evaluee, evaluator, questions)
 
         try:
-            display_text, completed, rating_ids = call_claude(system_prompt, claude_messages)
+            display_text, completed, show_ratings = call_claude(system_prompt, claude_messages)
         except Exception as e:
             return JSONResponse({"error": f"Claude error: {str(e)}"}, status_code=500)
+
+        rating_ids = []
+        if show_ratings:
+            q_id = _current_rating_question_id(conn, assignment_id)
+            if q_id:
+                rating_ids = [q_id]
 
         conn.execute(
             "INSERT INTO conversation_turns (assignment_id, role, content) VALUES (?, 'assistant', ?)",

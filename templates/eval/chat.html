@@ -39,7 +39,7 @@
       {% for t in turns %}
         {% if t.role == 'assistant' %}
         <div class="flex gap-3 items-end">
-          <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600 text-xs font-bold">AI</div>
+          <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600 text-xs font-bold">P.P.</div>
           <div class="bubble-claude px-4 py-3 text-sm text-gray-800 max-w-xl whitespace-pre-wrap">{{ t.content }}</div>
         </div>
         {% elif not t.content.startswith('RATING:') %}
@@ -52,7 +52,7 @@
 
     <!-- Typing indicator (hidden by default) -->
     <div id="typing-indicator" class="flex gap-3 items-end hidden">
-      <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600 text-xs font-bold">AI</div>
+      <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600 text-xs font-bold">P.P.</div>
       <div class="bubble-claude px-4 py-3 flex gap-1 items-center">
         <span class="typing-dot w-2 h-2 bg-gray-400 rounded-full inline-block"></span>
         <span class="typing-dot w-2 h-2 bg-gray-400 rounded-full inline-block"></span>
@@ -141,7 +141,7 @@ function appendClaudeMessage(text, ratingIds) {
   const wrap = document.createElement('div');
   wrap.className = 'flex gap-3 items-end';
   wrap.innerHTML = `
-    <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600 text-xs font-bold">AI</div>
+    <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600 text-xs font-bold">P.P.</div>
     <div class="bubble-claude px-4 py-3 text-sm text-gray-800 max-w-xl whitespace-pre-wrap">${escHtml(text)}</div>
   `;
   container.insertBefore(wrap, typing);

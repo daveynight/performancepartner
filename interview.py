@@ -1,5 +1,4 @@
 import os
-import re
 import anthropic
 
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
@@ -106,19 +105,19 @@ Conduct the interview section by section:
 
 ---
 
-## RULE 1 — Questions prefixed → SHOW_RATINGS:N (rating questions)
+## RULE 1 — Questions prefixed → SHOW_RATINGS (rating questions)
 
 - Rephrase the question naturally and conversationally — don't read it verbatim.
-- Your message MUST end with exactly `[SHOW_RATINGS:N]` where N is the number in the prefix.
-  Example: if the prefix is `→ SHOW_RATINGS:7`, end your message with `[SHOW_RATINGS:7]`.
-- The evaluator will respond with a message like `RATING:N:value` (e.g. `RATING:7:3`).
+- Your message MUST end with exactly `[SHOW_RATINGS]` (no number, no colon after it).
+- The evaluator will click a rating button, which sends a message like `RATING:N:value`
+  (e.g. `RATING:7:3`) — the N is the question ID managed by the system, not by you.
 - **If the value is 4 or 5**: acknowledge briefly (e.g. "Great, thanks.") and ask the next question.
 - **If the value is 3 or lower**: acknowledge, then ask ONE follow-up to understand why
   (e.g. "That's a 2 — can you tell me a bit more about what's been challenging there?").
   After their response (specific or not), move on. Never probe a second time on the same rating.
 - NEVER ask the evaluator to verbalize or describe their rating instead of clicking — always wait
   for the `RATING:N:value` message.
-- NEVER emit `[SHOW_RATINGS:N]` for any question that is not prefixed → SHOW_RATINGS.
+- NEVER emit `[SHOW_RATINGS]` for any question that is not prefixed → SHOW_RATINGS.
 
 ---
 
@@ -170,7 +169,7 @@ def _format_questions_by_category(questions: list[dict]) -> str:
         lines.append(f"### {cat}")
         for q in qs:
             if q["question_type"] == "likert":
-                prefix = f"→ SHOW_RATINGS:{q['id']}"
+                prefix = "→ SHOW_RATINGS"
             elif q["question_type"] == "goal":
                 prefix = f"→ OPEN_GOAL:{q['id']}"
             else:
@@ -179,9 +178,9 @@ def _format_questions_by_category(questions: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def call_claude(system_prompt: str, messages: list[dict]) -> tuple[str, bool, list[int]]:
+def call_claude(system_prompt: str, messages: list[dict]) -> tuple[str, bool, bool]:
     """
-    Returns (display_text, interview_complete, question_ids_to_show_ratings_for)
+    Returns (display_text, interview_complete, show_ratings)
     display_text has markers stripped.
     """
     response = client.messages.create(
@@ -193,13 +192,8 @@ def call_claude(system_prompt: str, messages: list[dict]) -> tuple[str, bool, li
     raw = response.content[0].text
 
     completed = "[INTERVIEW_COMPLETE]" in raw
+    show_ratings = "[SHOW_RATINGS]" in raw
 
-    rating_ids: list[int] = []
-    for match in re.finditer(r"\[SHOW_RATINGS:(\d+)\]", raw):
-        rating_ids.append(int(match.group(1)))
+    display = raw.replace("[SHOW_RATINGS]", "").replace("[INTERVIEW_COMPLETE]", "").strip()
 
-    # Strip markers from displayed text
-    display = re.sub(r"\[SHOW_RATINGS:\d+\]", "", raw)
-    display = display.replace("[INTERVIEW_COMPLETE]", "").strip()
-
-    return display, completed, rating_ids
+    return display, completed, show_ratings
