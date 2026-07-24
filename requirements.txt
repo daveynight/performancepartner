@@ -7,3 +7,4 @@ itsdangerous
 python-dotenv
 anthropic
 aiofiles
+resend

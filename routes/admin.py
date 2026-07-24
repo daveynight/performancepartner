@@ -64,6 +64,7 @@ async def user_new(
     if not name.strip():     errors["name"] = "Name is required."
     if not email.strip():    errors["email"] = "Email is required."
     if not password:         errors["password"] = "Password is required."
+    elif len(password) < 8:  errors["password"] = "Password must be at least 8 characters."
     if role not in ROLES:    errors["role"] = "Invalid role."
 
     if not errors:
@@ -122,6 +123,8 @@ async def user_edit(
     errors = {}
     if not name.strip():  errors["name"] = "Name is required."
     if not email.strip(): errors["email"] = "Email is required."
+    if password and len(password) < 8:
+        errors["password"] = "Password must be at least 8 characters."
 
     if not errors:
         with get_db() as conn:

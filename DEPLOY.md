@@ -27,6 +27,9 @@ docker run --rm -p 8000:8000 \
   -e SECRET_KEY=your-secret-key \
   -e DATABASE_PATH=/data/performancepartner.db \
   -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e RESEND_API_KEY=re_... \
+  -e FROM_EMAIL="Performance Partner <no-reply@partnersincareoahu.org>" \
+  -e APP_BASE_URL=http://localhost:8000 \
   performancepartner
 ```
 
@@ -49,7 +52,11 @@ Visit http://localhost:8000 — the app should boot, seed the admin account, and
    SECRET_KEY=<your-generated-key>
    DATABASE_PATH=/data/performancepartner.db
    ANTHROPIC_API_KEY=sk-ant-...
+   RESEND_API_KEY=re_...
+   FROM_EMAIL=Performance Partner <no-reply@partnersincareoahu.org>
+   APP_BASE_URL=https://<your-service>.onrender.com
    ```
+   `RESEND_API_KEY` powers password-reset emails — sign up for a free account and generate a key at https://resend.com/api-keys. `FROM_EMAIL` needs a domain verified in Resend for real use (their shared `onboarding@resend.dev` sender only works for testing). `APP_BASE_URL` is the public URL of this service, used to build the link inside the reset email.
 6. Click **Deploy**. Render builds the image and starts the service.
 
 > **Note:** The free tier spins down after inactivity. Use Starter ($7/mo) for always-on.

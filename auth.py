@@ -7,6 +7,7 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 SESSION_COOKIE = "pp_session"
 SESSION_MAX_AGE = 86400 * 7  # 7 days
+RESET_MAX_AGE = 3600  # 1 hour
 
 _signer = URLSafeTimedSerializer(SECRET_KEY)
 
@@ -34,6 +35,20 @@ def create_session_token(user_id: int) -> str:
 def _decode_token(token: str) -> Optional[int]:
     try:
         return _signer.loads(token, salt="session", max_age=SESSION_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return None
+
+
+def create_reset_token(user_id: int, password_hash: str) -> str:
+    return _signer.dumps({"uid": user_id, "pwh": password_hash[:20]}, salt="password_reset")
+
+
+def decode_reset_token(token: str) -> Optional[dict]:
+    # No reset_tokens table: the current password_hash fragment doubles as a
+    # single-use marker — resetting the password changes the hash, which
+    # invalidates this (and any other outstanding) token automatically.
+    try:
+        return _signer.loads(token, salt="password_reset", max_age=RESET_MAX_AGE)
     except (BadSignature, SignatureExpired):
         return None
 
