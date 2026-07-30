@@ -23,17 +23,22 @@ def _load_questions(conn) -> list[dict]:
         ())
 
 
-def _current_rating_question_id(conn, assignment_id: int) -> int | None:
-    all_likert = fetchall(conn,
-        "SELECT id FROM questions WHERE question_type='likert' AND is_active=1 ORDER BY order_index",
-        ())
-    rated = {r["question_id"] for r in fetchall(conn,
-        "SELECT question_id FROM responses WHERE assignment_id=? AND rating IS NOT NULL",
-        (assignment_id,))}
-    for q in all_likert:
-        if q["id"] not in rated:
-            return q["id"]
-    return None
+def _is_rated(conn, assignment_id: int, question_id: int) -> bool:
+    return fetchone(conn,
+        "SELECT 1 FROM responses WHERE assignment_id=? AND question_id=? AND rating IS NOT NULL",
+        (assignment_id, question_id)) is not None
+
+
+def _rating_ids_for(conn, assignment_id: int, asking_qid) -> list[int]:
+    """Buttons show iff the model says it is posing question N AND the DB confirms
+    N is an active likert question not yet rated. Deterministic, correctly scoped."""
+    if asking_qid is None:
+        return []
+    q = fetchone(conn,
+        "SELECT question_type FROM questions WHERE id=? AND is_active=1", (asking_qid,))
+    if q and q["question_type"] == "likert" and not _is_rated(conn, assignment_id, asking_qid):
+        return [asking_qid]
+    return []
 
 
 def _load_turns(conn, assignment_id: int) -> list[dict]:
@@ -63,12 +68,25 @@ async def eval_page(assignment_id: int, request: Request):
             (assignment_id,))
         rated_ids = {r["question_id"]: r["rating"] for r in saved_ratings}
 
+        # Reload safety: if the most recent assistant turn posed a likert question
+        # that isn't rated yet, re-render its 1-5 buttons on page load.
+        pending_rating_id = None
+        last_assistant = fetchone(conn,
+            "SELECT rating_question_id FROM conversation_turns "
+            "WHERE assignment_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+            (assignment_id,))
+        if last_assistant and last_assistant["rating_question_id"] is not None:
+            qid = last_assistant["rating_question_id"]
+            if not _is_rated(conn, assignment_id, qid):
+                pending_rating_id = qid
+
     return render(request, "eval/chat.html", {
         "assignment": a,
         "evaluee": evaluee,
         "evaluator": evaluator,
         "turns": turns,
         "rated_ids": rated_ids,
+        "pending_rating_id": pending_rating_id,
         "fresh": len(turns) == 0,
     })
 
@@ -134,19 +152,16 @@ async def eval_message(assignment_id: int, request: Request):
         system_prompt = build_system_prompt(a, evaluee, evaluator, questions)
 
         try:
-            display_text, completed, show_ratings = call_claude(system_prompt, claude_messages)
+            display_text, completed, asking_qid = call_claude(system_prompt, claude_messages)
         except Exception as e:
             return JSONResponse({"error": f"Claude error: {str(e)}"}, status_code=500)
 
-        rating_ids = []
-        if show_ratings:
-            q_id = _current_rating_question_id(conn, assignment_id)
-            if q_id:
-                rating_ids = [q_id]
+        rating_ids = _rating_ids_for(conn, assignment_id, asking_qid)
 
         conn.execute(
-            "INSERT INTO conversation_turns (assignment_id, role, content) VALUES (?, 'assistant', ?)",
-            (assignment_id, display_text))
+            "INSERT INTO conversation_turns (assignment_id, role, content, rating_question_id) "
+            "VALUES (?, 'assistant', ?, ?)",
+            (assignment_id, display_text, rating_ids[0] if rating_ids else None))
 
         if completed:
             conn.execute(

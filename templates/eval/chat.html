@@ -117,6 +117,7 @@
 <script>
 const ASSIGNMENT_ID = {{ assignment.id }};
 const EVALUEE_NAME = {{ evaluee.name | tojson }};
+const PENDING_RATING_ID = {{ pending_rating_id | tojson }};
 
 function scrollToBottom() {
   const el = document.getElementById('chat-messages');
@@ -147,24 +148,30 @@ function appendClaudeMessage(text, ratingIds) {
   container.insertBefore(wrap, typing);
 
   // Render rating buttons for each question id
-  ratingIds.forEach(qid => {
-    const rated = ratedQuestions[qid];
-    const btnRow = document.createElement('div');
-    btnRow.className = 'flex gap-3 items-end pl-10';
-    btnRow.id = `ratings-${qid}`;
-    let btns = '';
-    for (let v = 1; v <= 5; v++) {
-      const active = rated == v ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-indigo-50';
-      btns += `<button onclick="submitRating(${qid}, ${v})" data-qid="${qid}" data-val="${v}"
-                       class="rating-btn w-9 h-9 rounded-full border border-gray-200 text-sm font-medium transition-all ${active}">
-                 ${v}
-               </button>`;
-    }
-    btnRow.innerHTML = `<div class="flex gap-2 mt-1">${btns}</div>`;
-    container.insertBefore(btnRow, typing);
-  });
+  ratingIds.forEach(qid => insertRatingRow(qid));
 
   scrollToBottom();
+}
+
+function insertRatingRow(qid) {
+  // Don't double-render if a row for this question is already present.
+  if (document.getElementById(`ratings-${qid}`)) return;
+  const container = document.getElementById('chat-messages');
+  const typing = document.getElementById('typing-indicator');
+  const rated = ratedQuestions[qid];
+  const btnRow = document.createElement('div');
+  btnRow.className = 'flex gap-3 items-end pl-10';
+  btnRow.id = `ratings-${qid}`;
+  let btns = '';
+  for (let v = 1; v <= 5; v++) {
+    const active = rated == v ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-indigo-50';
+    btns += `<button onclick="submitRating(${qid}, ${v})" data-qid="${qid}" data-val="${v}"
+                     class="rating-btn w-9 h-9 rounded-full border border-gray-200 text-sm font-medium transition-all ${active}">
+               ${v}
+             </button>`;
+  }
+  btnRow.innerHTML = `<div class="flex gap-2 mt-1">${btns}</div>`;
+  container.insertBefore(btnRow, typing);
 }
 
 function appendUserMessage(text) {
@@ -285,6 +292,10 @@ const ratedQuestions = {{ rated_ids | tojson }};
 
 // Key handler for textarea in non-fresh state
 document.addEventListener('DOMContentLoaded', () => {
+  // Reload safety: re-render buttons for a pending, unrated likert question.
+  if (PENDING_RATING_ID !== null && PENDING_RATING_ID !== undefined) {
+    insertRatingRow(PENDING_RATING_ID);
+  }
   scrollToBottom();
   const input = document.getElementById('user-input');
   if (input) {

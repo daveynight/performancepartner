@@ -119,6 +119,14 @@ def create_tables():
         );
         """)
 
+        # Lightweight, idempotent migration (no framework in this app):
+        # records which likert question an assistant turn posed, so rating
+        # buttons can be re-rendered after a page reload.
+        try:
+            conn.execute("ALTER TABLE conversation_turns ADD COLUMN rating_question_id INTEGER")
+        except Exception:
+            pass  # column already exists
+
 
 def seed_admin():
     from auth import hash_password as hp
