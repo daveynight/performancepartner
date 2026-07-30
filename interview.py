@@ -2,7 +2,7 @@ import os
 import anthropic
 
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-MODEL = "claude-sonnet-5"
+MODEL = "claude-haiku-4-5-20251001"
 
 # The model is forced to answer every turn via this tool. Rating-button
 # visibility is derived server-side from `asking_question_id` + the question's
@@ -230,17 +230,13 @@ def call_claude(system_prompt: str, messages: list[dict]) -> tuple[str, bool, "i
     `asking_question_id` is the question the model says it is posing this turn
     (or None); the caller decides button visibility from the question's type.
     """
-    # Sonnet 5 runs adaptive thinking by default; effort "medium" tunes its
-    # depth. max_tokens is raised from the old Haiku value so thinking + the
-    # forced tool call share the budget without truncating.
     response = client.messages.create(
         model=MODEL,
-        max_tokens=4096,
+        max_tokens=1024,
         system=system_prompt,
         messages=messages,
         tools=[INTERVIEW_TOOL],
         tool_choice={"type": "tool", "name": "interview_turn"},
-        output_config={"effort": "medium"},
     )
     block = next(b for b in response.content if b.type == "tool_use")
     data = block.input
