@@ -2,7 +2,7 @@ import os
 import anthropic
 
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = "claude-haiku-4-5"
 
 # The model is forced to answer every turn via this tool. Rating-button
 # visibility is derived server-side from `asking_question_id` + the question's
@@ -15,6 +15,21 @@ INTERVIEW_TOOL = {
     "input_schema": {
         "type": "object",
         "properties": {
+            "last_answer": {
+                "type": "string",
+                "enum": ["specific", "vague", "declined", "not_applicable"],
+                "description": (
+                    "Classify the evaluator's most recent message before writing `message`. "
+                    "Use `specific` when it names a project, event, situation, behavior, or "
+                    "concrete outcome. Use `vague` when it is short, generic, or evaluative "
+                    "with no detail — e.g. 'good stuff', 'they're great', 'fine', 'pretty "
+                    "good', 'they do okay'. Use `declined` when the evaluator signals they "
+                    "have nothing further to offer — e.g. 'not much to add', 'that's all', "
+                    "'I don't know', 'can't think of anything'. Use `not_applicable` only "
+                    "when the last message was `__START__` or a `RATING:N:value`, or when "
+                    "you have not yet asked an open-ended question."
+                ),
+            },
             "message": {
                 "type": "string",
                 "description": "The conversational text to show the evaluator.",
@@ -33,7 +48,7 @@ INTERVIEW_TOOL = {
                 "description": "true only when all sections and wrap-up questions are done.",
             },
         },
-        "required": ["message", "asking_question_id", "interview_complete"],
+        "required": ["last_answer", "message", "asking_question_id", "interview_complete"],
         "additionalProperties": False,
     },
 }
@@ -134,6 +149,10 @@ Relationship: {rel}
 You respond every turn by calling the `interview_turn` tool. Put the conversational
 text you want the evaluator to see in `message`. Set the other fields as follows:
 
+- `last_answer`: classify the evaluator's most recent message before you write
+  `message`. This applies to every open-ended answer — listed text/goal questions,
+  section wrap-up questions, and follow-up probes alike. See RULE 2 for what to do
+  with each value.
 - `asking_question_id`: when your `message` is posing one of the numbered questions
   listed above (each is shown as `[ID] question text`), set this to that question's
   numeric ID. For anything else — an introduction, a follow-up probe, a section
@@ -170,15 +189,29 @@ Conduct the interview section by section:
 
 ---
 
-## RULE 2 — Open-ended questions (question_type: text or goal)
+## RULE 2 — Open-ended answers
+
+This rule governs the answer to EVERY open-ended question you ask: listed questions with
+question_type text or goal, AND the section wrap-up questions below. There is no open-ended
+question this rule does not cover.
 
 - Ask as a warm, open-ended question. Leave `asking_question_id` null (these are not rating questions).
-- If the answer is vague or generic (e.g. "fine", "good", "not sure", "they do okay"),
-  ask ONE follow-up probe for a specific example or situation.
-- If the second response is still vague, or the evaluator signals they have nothing more to add,
-  accept it gracefully and move on. Never probe a third time.
-- If the answer already names a project, event, behavior, or concrete outcome, it is specific
-  enough — move on without probing.
+- Set `last_answer` on the turn that follows their reply, then act on it:
+  - `specific` — the answer names a project, event, situation, behavior, or concrete
+    outcome. Acknowledge briefly and move to the next question.
+  - `vague` — the answer is short, generic, or evaluative with no detail. Your `message`
+    for this turn is a follow-up probe: acknowledge, then ask for one concrete detail —
+    a project, a situation, something they did, or the outcome it produced. Do not move
+    to the next question on this turn.
+  - `declined` — the evaluator has nothing further to offer. Accept it warmly and move to
+    the next question. Do not probe.
+- Probe at most once per question. If the answer is still vague after your probe, treat it
+  the way you would `declined`: accept it gracefully and move on.
+
+Write each probe fresh, in your own words, fitted to what they actually said and to the
+question you asked. Vary the wording between probes — an evaluator who gets the same
+sentence twice in one interview will notice. Ask for whichever concrete detail fits best:
+a project, a moment, a piece of work, something the person did, or the result it had.
 
 ---
 
@@ -187,6 +220,10 @@ Conduct the interview section by section:
 Ask these two questions as plain open-ended questions — no rating buttons, `asking_question_id` null:
 - "What did {evaluee_name} do particularly well in this area?"
 - "Where could {evaluee_name} improve in this area?"
+
+These are open-ended questions, so RULE 2 governs their answers: classify each reply in
+`last_answer` and probe once for a concrete detail when it comes back `vague`. Do not
+transition to the next section on the back of a vague wrap-up answer.
 
 ---
 
