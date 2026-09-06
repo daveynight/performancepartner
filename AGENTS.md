@@ -26,7 +26,7 @@ Single-file-per-concern FastAPI app. No ORM — raw SQLite via a thin `database.
 
 **Eval chat flow** (`routes/eval.py` + `interview.py`):
 - `GET /eval/{id}` renders `eval/chat.html` with existing `conversation_turns`
-- `POST /eval/{id}/message` receives the user message, optionally intercepts `RATING:N:value` to write the rating to `responses`, stores the turn, calls `interview.call_claude()`, stores the reply, and returns JSON `{reply, rating_ids, completed}`
+- `POST /eval/{id}/message` receives the user message, optionally intercepts `RATING:N:value` to write the rating to `responses`, stores the turn, calls `interview.call_claude()`, stores the reply (with the model's declared `section`), and returns JSON `{reply, rating_ids, completed}`
 - The frontend JS appends the reply bubble and, when `rating_ids` is non-empty, renders clickable 1–5 buttons that send `RATING:{question_id}:{value}` as the next message
 - Rating buttons are gated server-side by `_rating_ids_for()`: they appear only when the model sets `asking_question_id` **and** the DB confirms that question is an active `likert` that isn't already rated. There are no text markers in the response — the model never decides button visibility on its own
 - The question ID is persisted to `conversation_turns.rating_question_id`, so `GET /eval/{id}` can re-render still-pending buttons after a page reload (`pending_rating_id`)
@@ -44,6 +44,8 @@ Key tables: `users`, `questions`, `cycles`, `cycle_participants`, `assignments`,
 `assignments.relationship` is one of: `self`, `manager`, `peer`, `report`
 
 `conversation_turns.rating_question_id` (nullable) records the likert question an assistant turn posed, so pending rating buttons survive a page reload. It is **not** in the `CREATE TABLE` — it's added by an `ALTER TABLE` migration in `create_tables()` wrapped in a try/except, so grepping the schema block alone will miss it.
+
+`conversation_turns.section` (nullable TEXT) records the interview section the model declared for an assistant turn — a `questions.category` string, `Introduction`, or `Closing`. Same migration pattern as `rating_question_id` (try/except `ALTER TABLE` in `create_tables()`, not in the `CREATE TABLE`). The report page groups a transcript's turns by it to render section headers; turns with NULL (recorded before the column existed) render without headers.
 
 `questions.question_type` controls interview behavior: `likert` → rating buttons, `text` → open-ended, `goal` → open-ended (goal-framed)
 

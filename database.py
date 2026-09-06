@@ -127,6 +127,15 @@ def create_tables():
         except Exception:
             pass  # column already exists
 
+        # Same pattern: the interview section the model declared for an
+        # assistant turn (a question category, "Introduction", or "Closing"),
+        # so report transcripts can show section headers. NULL on turns
+        # recorded before this column existed.
+        try:
+            conn.execute("ALTER TABLE conversation_turns ADD COLUMN section TEXT")
+        except Exception:
+            pass  # column already exists
+
 
 def seed_admin():
     from auth import hash_password as hp

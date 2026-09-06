@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from database import get_db, fetchone, fetchall
 from auth import require_user
 from config import render
-from interview import build_system_prompt, call_claude
+from interview import build_system_prompt, call_claude, section_labels_for
 
 router = APIRouter()
 
@@ -152,16 +152,17 @@ async def eval_message(assignment_id: int, request: Request):
         system_prompt = build_system_prompt(a, evaluee, evaluator, questions)
 
         try:
-            display_text, completed, asking_qid = call_claude(system_prompt, claude_messages)
+            display_text, completed, asking_qid, section = call_claude(
+                system_prompt, claude_messages, section_labels_for(questions))
         except Exception as e:
             return JSONResponse({"error": f"Claude error: {str(e)}"}, status_code=500)
 
         rating_ids = _rating_ids_for(conn, assignment_id, asking_qid)
 
         conn.execute(
-            "INSERT INTO conversation_turns (assignment_id, role, content, rating_question_id) "
-            "VALUES (?, 'assistant', ?, ?)",
-            (assignment_id, display_text, rating_ids[0] if rating_ids else None))
+            "INSERT INTO conversation_turns (assignment_id, role, content, rating_question_id, section) "
+            "VALUES (?, 'assistant', ?, ?, ?)",
+            (assignment_id, display_text, rating_ids[0] if rating_ids else None, section))
 
         if completed:
             conn.execute(
