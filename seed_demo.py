@@ -112,7 +112,8 @@ def rating_for(evaluator_local, subject_local, qid):
 # which reports filter out of the transcript view — so they're recorded in the
 # `responses` table (see rating_for) rather than as conversation turns. That
 # keeps every Claude turn here paired with a real answer, the way the rendered
-# transcript looks in the app.
+# transcript looks in the app. Every turn also carries the section label the
+# live interviewer would declare, so demo reports show section headers.
 # ---------------------------------------------------------------------------
 
 # (area key, category label as it appears in the question bank, scope)
@@ -124,6 +125,10 @@ AREAS = [
     ("attendance",    "Attendance, Punctuality & Dependability", "team"),
     ("judgment",      "Judgment & Decision-Making",           "team"),
 ]
+
+# users.department -> the dept-specific questions.category it maps to, so the
+# transcript's section label matches what the live interviewer would declare.
+DEPT_CATEGORY = {"CES": "CES Program", "Finance": "Finance", "HMIS": "HMIS"}
 
 # Scopes each relationship unlocks. In this demo every staff member reports to
 # Maria, so peers all confirm they're on the same team during scoping.
@@ -504,6 +509,10 @@ def _pick(variants, rng, fallback=""):
 def transcript_for(evaluator_local, subject_local, subject_name, relationship, subject_dept):
     """Build a full interview transcript mirroring the real question flow.
 
+    Returns (role, content, section) triples. `section` is what the live
+    interviewer would declare in the tool's `section` field: "Introduction",
+    the exact questions.category label, or "Closing".
+
     Never emits '__START__' or 'RATING:' turns beyond the opening marker —
     reports filter those, and every Claude turn here has a real answer.
     """
@@ -514,34 +523,39 @@ def transcript_for(evaluator_local, subject_local, subject_name, relationship, s
     is_low = PROFILE.get(subject_local, 4) <= LOW_PERFORMER and not is_self
     scopes = SCOPES_FOR_REL[relationship]
     content = CONTENT[subject_local]
-    turns = [("user", "__START__")]
+
+    turns = []
+    section = "Introduction"
+
+    def say(role, text):
+        turns.append((role, text, section))
+
+    say("user", "__START__")
 
     # --- Intro ---
     if is_self:
-        turns.append(("assistant",
+        say("assistant",
             f"Hi {first} — I'll be walking you through your self-evaluation for this cycle. "
             f"I'll ask about a few different areas, some as 1-5 ratings and some as open questions. "
-            f"There are no wrong answers here; be as candid as you can. Let's get started."))
+            f"There are no wrong answers here; be as candid as you can. Let's get started.")
     else:
-        turns.append(("assistant",
+        say("assistant",
             f"Thanks for making time for this. I'll be gathering your feedback on {subject_name} for this "
             f"evaluation cycle. I'll ask about a few areas, some as 1-5 ratings and some as open questions. "
-            f"Your specific examples are the most useful part, so share what comes to mind."))
+            f"Your specific examples are the most useful part, so share what comes to mind.")
 
     # --- Scoping (peers only, matching the real prompt) ---
     if relationship == "peer":
-        turns += [
-            ("assistant", f"First, a couple of quick scoping questions. Are you on {first}'s team — do you work with them directly day to day?"),
-            ("user", "Yes, we're both on Maria's team and we work together regularly."),
-            ("assistant", f"Thanks. And are you {first}'s manager?"),
-            ("user", "No, we're peers."),
-            ("assistant", "Perfect — that means I'll cover the general and team-specific questions with you."),
-        ]
+        say("assistant", f"First, a couple of quick scoping questions. Are you on {first}'s team — do you work with them directly day to day?")
+        say("user", "Yes, we're both on Maria's team and we work together regularly.")
+        say("assistant", f"Thanks. And are you {first}'s manager?")
+        say("user", "No, we're peers.")
+        say("assistant", "Perfect — that means I'll cover the general and team-specific questions with you.")
 
     # --- One section per category ---
     areas = [(k, label) for k, label, scope in AREAS if scope in scopes]
-    if subject_dept in ("CES", "Finance", "HMIS"):
-        areas.append(("dept", f"{subject_dept}-specific responsibilities"))
+    if subject_dept in DEPT_CATEGORY:
+        areas.append(("dept", DEPT_CATEGORY[subject_dept]))
 
     # Show the vague-answer follow-up probe in one section per transcript.
     probe_area = rng.choice([k for k, _ in areas]) if areas else None
@@ -556,50 +570,54 @@ def transcript_for(evaluator_local, subject_local, subject_name, relationship, s
         if not good and not improve:
             continue
 
-        turns.append(("assistant",
+        section = label
+        say("assistant",
             f"Let's start with {label}." if key == areas[0][0]
-            else rng.choice(SECTION_OPENERS).format(label=label)))
-        turns.append(("assistant",
-            f"{rng.choice(AFTER_RATINGS)} What did {subject_name} do particularly well in this area?"))
+            else rng.choice(SECTION_OPENERS).format(label=label))
+        say("assistant",
+            f"{rng.choice(AFTER_RATINGS)} What did {subject_name} do particularly well in this area?")
 
         if key == probe_area:
             # Demonstrates RULE 2: a vague answer gets one probe for specifics.
             # A struggling employee's evaluator hedges rather than praises.
             if is_low:
-                turns.append(("user", rng.choice(VAGUE_NEUTRAL)))
-                turns.append(("assistant", PROBE_NEUTRAL))
+                say("user", rng.choice(VAGUE_NEUTRAL))
+                say("assistant", PROBE_NEUTRAL)
             else:
-                turns.append(("user", rng.choice(VAGUE_POSITIVE)))
-                turns.append(("assistant", PROBE_POSITIVE))
-            turns.append(("user", good))
+                say("user", rng.choice(VAGUE_POSITIVE))
+                say("assistant", PROBE_POSITIVE)
+            say("user", good)
         else:
-            turns.append(("user", good))
+            say("user", good)
 
-        turns.append(("assistant",
-            f"{rng.choice(AFTER_STRENGTH)} And where could {subject_name} improve in this area?"))
-        turns.append(("user", improve))
+        say("assistant",
+            f"{rng.choice(AFTER_STRENGTH)} And where could {subject_name} improve in this area?")
+        say("user", improve)
 
     # --- Free-text Comments question (general scope) ---
     closing = CLOSING[subject_local]
-    turns.append(("assistant", f"Those are all the rated questions. Any additional comments you'd like to add about {subject_name}?"))
-    turns.append(("user", closing["comment"] if not is_self else
-                  "I'd say it was a solid cycle overall, with a couple of things I want to do differently next time."))
+    section = "Comments"
+    say("assistant", f"Those are all the rated questions. Any additional comments you'd like to add about {subject_name}?")
+    say("user", closing["comment"] if not is_self else
+        "I'd say it was a solid cycle overall, with a couple of things I want to do differently next time.")
 
     # --- Manager-scope free text + goals ---
     if "manager" in scopes:
-        turns.append(("assistant",
+        say("assistant",
             f"Are there areas where {subject_name} could improve outcomes or personal growth — "
-            f"including anything we've covered or beyond it?"))
-        turns.append(("user", closing["growth"]))
-        turns.append(("assistant", f"What goals has {subject_name} been working on over the last 12 months?"))
-        turns.append(("user", closing["goal_past"]))
-        turns.append(("assistant", "And what goals should they focus on for the next 12 months?"))
-        turns.append(("user", closing["goal_next"]))
+            f"including anything we've covered or beyond it?")
+        say("user", closing["growth"])
+        section = "Goals"
+        say("assistant", f"What goals has {subject_name} been working on over the last 12 months?")
+        say("user", closing["goal_past"])
+        say("assistant", "And what goals should they focus on for the next 12 months?")
+        say("user", closing["goal_next"])
 
     # --- Close ---
-    turns.append(("assistant",
+    section = "Closing"
+    say("assistant",
         "That's everything — thank you for taking the time and for being so specific. "
-        "Your responses have been recorded."))
+        "Your responses have been recorded.")
     return turns
 
 
@@ -706,11 +724,12 @@ def seed(conn):
                     "INSERT INTO responses (assignment_id, question_id, rating) VALUES (?,?,?)",
                     (aid, q["id"], rating_for(id_to_local[ev], subj_local, q["id"])))
             subj_name = next(n for n, l, _r, _d, _m in PEOPLE if l == subj_local)
-            for role, content in transcript_for(
+            for role, content, section in transcript_for(
                     id_to_local[ev], subj_local, subj_name, rel, subj_dept):
                 conn.execute(
-                    "INSERT INTO conversation_turns (assignment_id, role, content) VALUES (?,?,?)",
-                    (aid, role, content))
+                    "INSERT INTO conversation_turns (assignment_id, role, content, section) "
+                    "VALUES (?,?,?,?)",
+                    (aid, role, content, section))
             conn.execute(
                 "UPDATE assignments SET status='completed', "
                 "started_at=datetime('now','-5 days'), completed_at=datetime('now','-3 days') "
