@@ -4,54 +4,99 @@ import anthropic
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 MODEL = "claude-haiku-4-5"
 
+INTRO_SECTION = "Introduction"
+CLOSING_SECTION = "Closing"
+
+
+def section_labels_for(questions: list[dict]) -> list[str]:
+    """Enum values for the tool's `section` field.
+
+    "Introduction", then every distinct question category in order_index
+    order, then "Closing". Built per request so admin edits to categories are
+    picked up immediately and the model can only ever name a real section.
+
+    A category equal to one of the two reserved labels is skipped rather than
+    duplicated — admin question CRUD lets `questions.category` be arbitrary
+    free text, so an admin could otherwise create a category literally named
+    "Introduction" or "Closing" and produce a JSON Schema enum with duplicate
+    values.
+    """
+    categories: list[str] = []
+    for q in sorted(questions, key=lambda q: q["order_index"]):
+        category = q["category"]
+        if category in (INTRO_SECTION, CLOSING_SECTION):
+            continue
+        if category not in categories:
+            categories.append(category)
+    return [INTRO_SECTION, *categories, CLOSING_SECTION]
+
+
 # The model is forced to answer every turn via this tool. Rating-button
 # visibility is derived server-side from `asking_question_id` + the question's
 # real type in the DB — never from a free-text marker the model must remember
-# to print (that was the old, unreliable mechanism).
-INTERVIEW_TOOL = {
-    "name": "interview_turn",
-    "description": "Return your next message to the evaluator for this turn.",
-    "strict": True,
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "last_answer": {
-                "type": "string",
-                "enum": ["specific", "vague", "declined", "not_applicable"],
-                "description": (
-                    "Classify the evaluator's most recent message before writing `message`. "
-                    "Use `specific` when it names a project, event, situation, behavior, or "
-                    "concrete outcome. Use `vague` when it is short, generic, or evaluative "
-                    "with no detail — e.g. 'good stuff', 'they're great', 'fine', 'pretty "
-                    "good', 'they do okay'. Use `declined` when the evaluator signals they "
-                    "have nothing further to offer — e.g. 'not much to add', 'that's all', "
-                    "'I don't know', 'can't think of anything'. Use `not_applicable` only "
-                    "when the last message was `__START__` or a `RATING:N:value`, or when "
-                    "you have not yet asked an open-ended question."
-                ),
+# to print (that was the old, unreliable mechanism). `section` is likewise a
+# structured enum, built per request, so report transcripts can show section
+# headers without parsing message text.
+#
+# Field order matters: strict tool use generates fields in schema order, so
+# `last_answer` and `section` are classified BEFORE `message` is written.
+def build_interview_tool(sections: list[str]) -> dict:
+    return {
+        "name": "interview_turn",
+        "description": "Return your next message to the evaluator for this turn.",
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "last_answer": {
+                    "type": "string",
+                    "enum": ["specific", "vague", "declined", "not_applicable"],
+                    "description": (
+                        "Classify the evaluator's most recent message before writing `message`. "
+                        "Use `specific` when it names a project, event, situation, behavior, or "
+                        "concrete outcome. Use `vague` when it is short, generic, or evaluative "
+                        "with no detail — e.g. 'good stuff', 'they're great', 'fine', 'pretty "
+                        "good', 'they do okay'. Use `declined` when the evaluator signals they "
+                        "have nothing further to offer — e.g. 'not much to add', 'that's all', "
+                        "'I don't know', 'can't think of anything'. Use `not_applicable` only "
+                        "when the last message was `__START__` or a `RATING:N:value`, or when "
+                        "you have not yet asked an open-ended question."
+                    ),
+                },
+                "section": {
+                    "type": "string",
+                    "enum": sections,
+                    "description": (
+                        "The part of the interview the evaluator is in AFTER this message. "
+                        "Use `Introduction` for your greeting and any scoping questions. Once "
+                        "you open a section, use that section's exact category name for its "
+                        "opener, every listed question in it, your follow-up probes, and the "
+                        "two wrap-up questions, until you open the next section. Use `Closing` "
+                        "only for the final thank-you."
+                    ),
+                },
+                "message": {
+                    "type": "string",
+                    "description": "The conversational text to show the evaluator.",
+                },
+                "asking_question_id": {
+                    "type": ["integer", "null"],
+                    "description": (
+                        "The numeric ID of the question from the list you are posing to the "
+                        "evaluator in THIS message. Use null for introductions, follow-up "
+                        "probes, section wrap-up questions, transitions, or anything that is "
+                        "not directly posing one of the listed questions."
+                    ),
+                },
+                "interview_complete": {
+                    "type": "boolean",
+                    "description": "true only when all sections and wrap-up questions are done.",
+                },
             },
-            "message": {
-                "type": "string",
-                "description": "The conversational text to show the evaluator.",
-            },
-            "asking_question_id": {
-                "type": ["integer", "null"],
-                "description": (
-                    "The numeric ID of the question from the list you are posing to the "
-                    "evaluator in THIS message. Use null for introductions, follow-up "
-                    "probes, section wrap-up questions, transitions, or anything that is "
-                    "not directly posing one of the listed questions."
-                ),
-            },
-            "interview_complete": {
-                "type": "boolean",
-                "description": "true only when all sections and wrap-up questions are done.",
-            },
+            "required": ["last_answer", "section", "message", "asking_question_id", "interview_complete"],
+            "additionalProperties": False,
         },
-        "required": ["last_answer", "message", "asking_question_id", "interview_complete"],
-        "additionalProperties": False,
-    },
-}
+    }
 
 
 def build_system_prompt(assignment: dict, evaluee: dict, evaluator: dict, questions: list[dict]) -> str:
@@ -154,6 +199,12 @@ text you want the evaluator to see in `message`. Set the other fields as follows
   questions, section wrap-up questions, and replies to your follow-up probes alike.
   RULE 1 uses it to decide whether a low rating needs a second follow-up; RULE 2 uses
   it to decide whether an open-ended answer needs a probe.
+- `section`: the part of the interview the evaluator is in after this message. Use
+  `Introduction` while you are greeting them or asking scoping questions. Once you open
+  a section, use that section's exact category heading (the `### ...` lines above) for
+  its opener, its questions, your follow-up probes, and its two wrap-up questions, until
+  you open the next section. Use `Closing` only on your final thank-you. Reports use
+  this to put a heading over each part of the transcript, so keep it accurate.
 - `asking_question_id`: when your `message` is posing one of the numbered questions
   listed above (each is shown as `[ID] question text`), set this to that question's
   numeric ID. For anything else — an introduction, a follow-up probe, a section
@@ -272,21 +323,25 @@ def _format_questions_by_category(questions: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def call_claude(system_prompt: str, messages: list[dict]) -> tuple[str, bool, "int | None"]:
+def call_claude(
+    system_prompt: str, messages: list[dict], sections: list[str]
+) -> tuple[str, bool, "int | None", "str | None"]:
     """
-    Returns (display_text, interview_complete, asking_question_id).
+    Returns (display_text, interview_complete, asking_question_id, section).
 
-    The model is forced to answer via the `interview_turn` tool, so the three
+    The model is forced to answer via the `interview_turn` tool, so all four
     values come straight from validated tool input — no marker parsing.
     `asking_question_id` is the question the model says it is posing this turn
     (or None); the caller decides button visibility from the question's type.
+    `section` is one of `sections` (or None if absent) and is stored on the
+    turn so report transcripts can show section headers.
     """
     response = client.messages.create(
         model=MODEL,
         max_tokens=1024,
         system=system_prompt,
         messages=messages,
-        tools=[INTERVIEW_TOOL],
+        tools=[build_interview_tool(sections)],
         tool_choice={"type": "tool", "name": "interview_turn"},
     )
     block = next(b for b in response.content if b.type == "tool_use")
@@ -295,5 +350,6 @@ def call_claude(system_prompt: str, messages: list[dict]) -> tuple[str, bool, "i
     display = (data.get("message") or "").strip()
     completed = bool(data.get("interview_complete"))
     asking_qid = data.get("asking_question_id")
+    section = data.get("section")
 
-    return display, completed, asking_qid
+    return display, completed, asking_qid, section
