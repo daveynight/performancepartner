@@ -134,7 +134,16 @@
         </svg>
       </summary>
       <div class="border-t border-gray-100 px-5 py-4 space-y-3 max-h-96 overflow-y-auto">
-        {% for turn in t.turns %}
+        {% for section in t.sections %}
+        {% if section.label %}
+        <div class="flex items-center gap-3 pt-2 {% if not loop.first %}mt-2 border-t border-gray-100{% endif %}">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap" data-section-header>
+            {{ section.label }}
+          </span>
+          <span class="flex-1 h-px bg-gray-200"></span>
+        </div>
+        {% endif %}
+        {% for turn in section.turns %}
         {% if turn.role == 'assistant' %}
         <div class="flex gap-3">
           <span class="text-xs font-medium text-indigo-500 w-16 flex-shrink-0 pt-0.5">Claude</span>
@@ -148,6 +157,7 @@
           <p class="text-sm text-gray-800 whitespace-pre-wrap">{{ turn.content }}</p>
         </div>
         {% endif %}
+        {% endfor %}
         {% endfor %}
       </div>
     </details>

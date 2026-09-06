@@ -147,7 +147,8 @@ async def user_report(cycle_id: int, user_id: int, request: Request):
         transcripts = []
         for a in assignments:
             turns = fetchall(conn,
-                "SELECT role, content FROM conversation_turns WHERE assignment_id = ? ORDER BY id",
+                "SELECT role, content, section FROM conversation_turns "
+                "WHERE assignment_id = ? ORDER BY id",
                 (a["id"],))
             # Filter out RATING: and __START__ messages
             visible_turns = [
@@ -164,7 +165,7 @@ async def user_report(cycle_id: int, user_id: int, request: Request):
             transcripts.append({
                 "label": label,
                 "relationship": a["relationship"],
-                "turns": visible_turns,
+                "sections": group_turns_by_section(visible_turns),
             })
 
     return render(request, "reports/individual.html", {
