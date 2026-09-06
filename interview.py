@@ -67,12 +67,15 @@ def build_interview_tool(sections: list[str]) -> dict:
                     "type": "string",
                     "enum": sections,
                     "description": (
-                        "The part of the interview the evaluator is in AFTER this message. "
-                        "Use `Introduction` for your greeting and any scoping questions. Once "
-                        "you open a section, use that section's exact category name for its "
+                        "The section THIS message belongs to. If this message OPENS a new "
+                        "section -- announcing the topic, or posing that section's first "
+                        "question -- name the NEW section here, not the one you just finished; "
+                        "the opener itself is already part of the new section. Use "
+                        "`Introduction` for your greeting and any scoping questions. Once you "
+                        "open a section, use that section's exact category name for its "
                         "opener, every listed question in it, your follow-up probes, and the "
-                        "two wrap-up questions, until you open the next section. Use `Closing` "
-                        "only for the final thank-you."
+                        "two wrap-up questions, until the message that opens the next section. "
+                        "Use `Closing` only for the final thank-you."
                     ),
                 },
                 "message": {
@@ -199,12 +202,15 @@ text you want the evaluator to see in `message`. Set the other fields as follows
   questions, section wrap-up questions, and replies to your follow-up probes alike.
   RULE 1 uses it to decide whether a low rating needs a second follow-up; RULE 2 uses
   it to decide whether an open-ended answer needs a probe.
-- `section`: the part of the interview the evaluator is in after this message. Use
-  `Introduction` while you are greeting them or asking scoping questions. Once you open
-  a section, use that section's exact category heading (the `### ...` lines above) for
-  its opener, its questions, your follow-up probes, and its two wrap-up questions, until
-  you open the next section. Use `Closing` only on your final thank-you. Reports use
-  this to put a heading over each part of the transcript, so keep it accurate.
+- `section`: the section THIS message belongs to. If this message OPENS a new section
+  -- announcing the topic, or posing that section's first question -- name the NEW
+  section here, not the one you just finished; the opener itself is already part of the
+  new section. Use `Introduction` while you are greeting them or asking scoping
+  questions. Once you open a section, use that section's exact category heading (the
+  `### ...` lines above) for its opener, its questions, your follow-up probes, and its
+  two wrap-up questions, until the message that opens the next section. Use `Closing`
+  only on your final thank-you. Reports use this to put a heading over each part of the
+  transcript, so keep it accurate.
 - `asking_question_id`: when your `message` is posing one of the numbered questions
   listed above (each is shown as `[ID] question text`), set this to that question's
   numeric ID. For anything else — an introduction, a follow-up probe, a section

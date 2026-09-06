@@ -29,6 +29,28 @@ def _is_rated(conn, assignment_id: int, question_id: int) -> bool:
         (assignment_id, question_id)) is not None
 
 
+def _section_for_asking_qid(conn, asking_qid):
+    """The section a turn actually belongs to, derived from the DB rather than
+    trusted from the model's `section` claim.
+
+    The model transitions `section` one turn late at boundaries -- the turn
+    that OPENS a new section by posing that section's first question is
+    reported with the section it just left. When the model says it is posing
+    question N, the DB knows N's real category, so that wins over whatever
+    the model wrote in `section` -- the same principle CLAUDE.md documents
+    for rating-button visibility in `_rating_ids_for`.
+
+    Returns the question's category for an active question, or None if
+    `asking_qid` is None, unknown, or inactive -- callers should fall back to
+    the model's own `section` value in that case.
+    """
+    if asking_qid is None:
+        return None
+    q = fetchone(conn,
+        "SELECT category FROM questions WHERE id=? AND is_active=1", (asking_qid,))
+    return q["category"] if q else None
+
+
 def _rating_ids_for(conn, assignment_id: int, asking_qid) -> list[int]:
     """Buttons show iff the model says it is posing question N AND the DB confirms
     N is an active likert question not yet rated. Deterministic, correctly scoped."""
@@ -158,6 +180,7 @@ async def eval_message(assignment_id: int, request: Request):
             return JSONResponse({"error": f"Claude error: {str(e)}"}, status_code=500)
 
         rating_ids = _rating_ids_for(conn, assignment_id, asking_qid)
+        section = _section_for_asking_qid(conn, asking_qid) or section
 
         conn.execute(
             "INSERT INTO conversation_turns (assignment_id, role, content, rating_question_id, section) "
