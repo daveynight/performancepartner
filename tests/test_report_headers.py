@@ -1,3 +1,4 @@
+import html as html_lib
 import re
 
 from database import get_db
@@ -43,6 +44,33 @@ def test_report_shows_section_headers_in_order(client_with_assignment):
     # Filtered turns stay filtered.
     assert "RATING:12:4" not in html
     assert "__START__" not in html
+
+
+def test_report_shows_ampersand_section_header_correctly(client_with_assignment):
+    """Several real category names contain an ampersand (e.g. "Cooperation &
+    Teamwork", "Productivity & Technical Knowledge"). Jinja2 autoescapes, so
+    the raw HTML the template emits holds the escaped `&amp;` form -- that is
+    correct behavior and the template does not (and should not) use `|safe`.
+    Confirm both ends of that: the raw HTML contains the escaped form, and
+    unescaping it recovers exactly the real category name a reader sees.
+    """
+    client, ids = client_with_assignment
+    _complete_with_turns(ids, [
+        ("assistant", "Let's talk about how you work with others.", "Cooperation & Teamwork"),
+        ("user", "Sure, happy to.", None),
+        ("assistant", "Thanks, that's everything.", "Closing"),
+    ])
+    html = _report_html(client, ids)
+
+    # The raw response body carries the escaped form, not the literal "&".
+    assert "Cooperation &amp; Teamwork" in html
+    assert "Cooperation & Teamwork" not in html
+
+    # Unescaping what the reader's browser would render recovers the exact
+    # category name -- proving the header reads correctly, not just that
+    # escaping happened.
+    headers = [html_lib.unescape(h) for h in re.findall(r'data-section-header>\s*([^<]+?)\s*<', html)]
+    assert headers == ["Cooperation & Teamwork", "Closing"]
 
 
 def test_report_without_sections_renders_no_headers(client_with_assignment):

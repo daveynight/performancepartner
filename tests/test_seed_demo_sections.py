@@ -24,9 +24,22 @@ def test_every_area_the_relationship_unlocks_gets_its_category_label():
 
 
 def test_peer_scoping_turns_are_in_introduction():
-    turns = seed_demo.transcript_for("aisha", "tom", "Tom Reyes", "peer", "Finance")
-    scoping = [t for t in turns if "scoping" in t[1].lower() or "peers" in t[1].lower()]
-    assert scoping, "expected peer scoping turns"
+    subject_name = "Tom Reyes"
+    first = subject_name.split()[0]
+    turns = seed_demo.transcript_for("aisha", "tom", subject_name, "peer", "Finance")
+
+    # The fixed assistant scoping strings transcript_for() emits for a peer
+    # (see seed_demo.py's `say()` calls under "Scoping (peers only, matching
+    # the real prompt)"). Matched on exact text rather than a loose substring
+    # like "scoping"/"peers", which also matches unrelated content elsewhere
+    # in seed_demo.py (e.g. "Rescoping" in a self-evaluation answer).
+    scoping_texts = {
+        f"First, a couple of quick scoping questions. Are you on {first}'s team — do you work with them directly day to day?",
+        f"Thanks. And are you {first}'s manager?",
+        "Perfect — that means I'll cover the general and team-specific questions with you.",
+    }
+    scoping = [t for t in turns if t[1] in scoping_texts]
+    assert len(scoping) == len(scoping_texts), "expected all three peer scoping turns"
     assert all(s == "Introduction" for _r, _c, s in scoping)
     assert "Goals" not in _sections(turns)  # peers never reach manager-scope questions
     assert "Finance" in _sections(turns)     # Tom's department block

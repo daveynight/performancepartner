@@ -528,6 +528,12 @@ def transcript_for(evaluator_local, subject_local, subject_name, relationship, s
     section = "Introduction"
 
     def say(role, text):
+        # User turns are tagged with the current `section` too, even though
+        # live interviews leave conversation_turns.section NULL for the user
+        # role (the report renderer ignores a user turn's section entirely).
+        # The tagging exists so test_section_labels_change_only_on_assistant_turns
+        # has something to assert against: that a section can only ever
+        # advance on an assistant turn, never a user one.
         turns.append((role, text, section))
 
     say("user", "__START__")
