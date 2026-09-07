@@ -15,6 +15,26 @@ REL_COLORS = {
 }
 
 
+def group_turns_by_section(turns: list[dict]) -> list[dict]:
+    """Split an ordered transcript into consecutive section groups.
+
+    An assistant turn whose `section` is set and differs from the current
+    group's label opens a new group. User turns, and assistant turns with a
+    null `section` (transcripts recorded before sections existed), stay in
+    the current group. Legacy transcripts therefore come back as a single
+    group with label None, which the template renders without a header.
+
+    Returns [{"label": str | None, "turns": [turn, ...]}, ...].
+    """
+    groups: list[dict] = []
+    for turn in turns:
+        section = turn.get("section") if turn["role"] == "assistant" else None
+        if not groups or (section is not None and section != groups[-1]["label"]):
+            groups.append({"label": section, "turns": []})
+        groups[-1]["turns"].append(turn)
+    return groups
+
+
 @router.get("/reports/{cycle_id}/user/{user_id}")
 async def user_report(cycle_id: int, user_id: int, request: Request):
     viewer = require_user(request)
@@ -127,7 +147,8 @@ async def user_report(cycle_id: int, user_id: int, request: Request):
         transcripts = []
         for a in assignments:
             turns = fetchall(conn,
-                "SELECT role, content FROM conversation_turns WHERE assignment_id = ? ORDER BY id",
+                "SELECT role, content, section FROM conversation_turns "
+                "WHERE assignment_id = ? ORDER BY id",
                 (a["id"],))
             # Filter out RATING: and __START__ messages
             visible_turns = [
@@ -144,7 +165,7 @@ async def user_report(cycle_id: int, user_id: int, request: Request):
             transcripts.append({
                 "label": label,
                 "relationship": a["relationship"],
-                "turns": visible_turns,
+                "sections": group_turns_by_section(visible_turns),
             })
 
     return render(request, "reports/individual.html", {
