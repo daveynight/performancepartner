@@ -31,6 +31,23 @@ Single-file-per-concern FastAPI app. No ORM — raw SQLite via a thin `database.
 - Rating buttons are gated server-side by `_rating_ids_for()`: they appear only when the model sets `asking_question_id` **and** the DB confirms that question is an active `likert` that isn't already rated. There are no text markers in the response — the model never decides button visibility on its own
 - The question ID is persisted to `conversation_turns.rating_question_id`, so `GET /eval/{id}` can re-render still-pending buttons after a page reload (`pending_rating_id`)
 - Completion comes from the tool's `interview_complete` field returned by `call_claude()`; the route then marks the assignment `completed`
+- Scores stay changeable while the interview is in progress, by two different routes.
+  Clicking the row for the question just asked goes through `POST /eval/{id}/message` as
+  today, so the interviewer sees it and can probe a low rating. Clicking an *earlier*
+  row goes to `POST /eval/{id}/rating`, which writes `responses` and returns — no model
+  call and deliberately **no `conversation_turns` row**, because a reply about a question
+  from two sections back would land in the middle of an unrelated exchange. The JS picks
+  the path by comparing the question to `currentRatingQid`, which tracks the most recently
+  posed question
+- `GET /eval/{id}` passes `revisable` ({question_id: rating}, active likert questions only)
+  and the template re-renders a clickable row beneath each assistant turn whose
+  `rating_question_id` is in it. Without this a reload left earlier scores invisible and
+  therefore unchangeable. Both the server-rendered rows and the JS-inserted ones call
+  `submitRating()`, so their markup must stay in sync
+- The revision endpoint refuses a value outside 1-5, a non-likert or deactivated question,
+  and a completed assignment; access is the same `_get_assignment_or_403` check as the rest
+  of the flow. `_upsert_rating()` is shared by both paths so re-scoring updates the row
+  instead of accumulating duplicates
 
 **Cycle lifecycle:** draft → active → closed
 - Activating a draft cycle generates all `assignments` rows (self + peer + manager + report combinations) based on `users.manager_id` relationships

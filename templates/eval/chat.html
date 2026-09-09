@@ -42,6 +42,21 @@
           <div class="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600 text-xs font-bold">P.P.</div>
           <div class="bubble-claude px-4 py-3 text-sm text-gray-800 max-w-xl whitespace-pre-wrap">{{ t.content }}</div>
         </div>
+        {# A score already given stays clickable so it can be changed later.
+           This markup must match insertRatingRow() in the script below. #}
+        {% if t.rating_question_id and t.rating_question_id in revisable %}
+        {% set qid = t.rating_question_id %}
+        <div class="flex gap-3 items-end pl-10" id="ratings-{{ qid }}">
+          <div class="flex gap-2 mt-1">
+            {% for v in range(1, 6) %}
+            <button onclick="submitRating({{ qid }}, {{ v }})" data-qid="{{ qid }}" data-val="{{ v }}"
+                    class="rating-btn w-9 h-9 rounded-full border border-gray-200 text-sm font-medium transition-all {% if revisable[qid] == v %}ring-2 ring-indigo-400 bg-indigo-600 text-white{% else %}bg-white text-gray-700 hover:bg-indigo-50{% endif %}">
+              {{ v }}
+            </button>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
         {% elif not t.content.startswith('RATING:') %}
         <div class="flex gap-3 items-end justify-end">
           <div class="bubble-user px-4 py-3 text-sm max-w-xl whitespace-pre-wrap">{{ t.content }}</div>
@@ -119,6 +134,10 @@ const ASSIGNMENT_ID = {{ assignment.id }};
 const EVALUEE_NAME = {{ evaluee.name | tojson }};
 const PENDING_RATING_ID = {{ pending_rating_id | tojson }};
 
+// The question the interviewer most recently posed. Clicking its row goes
+// through the interviewer; every other row is a silent revision.
+let currentRatingQid = PENDING_RATING_ID;
+
 function scrollToBottom() {
   const el = document.getElementById('chat-messages');
   el.scrollTop = el.scrollHeight;
@@ -149,6 +168,10 @@ function appendClaudeMessage(text, ratingIds) {
 
   // Render rating buttons for each question id
   ratingIds.forEach(qid => insertRatingRow(qid));
+
+  // The newest posed question becomes "current", which makes every earlier
+  // row a silent revision from here on.
+  if (ratingIds.length > 0) currentRatingQid = ratingIds[0];
 
   scrollToBottom();
 }
@@ -259,32 +282,58 @@ async function sendMessage() {
 }
 
 async function submitRating(qid, value) {
+  const previous = ratedQuestions[qid];
   // Update UI immediately
   ratedQuestions[qid] = value;
+  paintRatingRow(qid, value);
+
   const row = document.getElementById(`ratings-${qid}`);
-  if (row) {
-    row.querySelectorAll('.rating-btn').forEach(btn => {
-      const v = parseInt(btn.dataset.val);
-      if (v === value) {
-        btn.className = btn.className.replace(/bg-white text-gray-700 hover:bg-indigo-50/g, '')
-                         + ' ring-2 ring-indigo-400 bg-indigo-600 text-white';
-      } else {
-        btn.className = btn.className.replace(/ring-2 ring-indigo-400 bg-indigo-600 text-white/g, '')
-                                     .replace(/bg-indigo-600/g, 'bg-white')
-                         + ' text-gray-700 hover:bg-indigo-50';
-      }
-    });
+  const buttons = row ? row.querySelectorAll('.rating-btn') : [];
+  buttons.forEach(b => b.disabled = true);
+
+  if (qid === currentRatingQid) {
+    // The question just asked: let the interviewer see it and probe a low score.
+    await callClaude(`RATING:${qid}:${value}`);
+  } else {
+    // An earlier question: write the new score quietly. A reply about a
+    // question from two sections back would derail the current exchange.
+    await reviseRating(qid, value, previous);
   }
 
-  // Disable rating buttons while Claude responds
-  if (row) row.querySelectorAll('.rating-btn').forEach(b => b.disabled = true);
+  buttons.forEach(b => b.disabled = false);
+}
 
-  // Send as RATING: message
-  const ratingMsg = `RATING:${qid}:${value}`;
-  await callClaude(ratingMsg);
+async function reviseRating(qid, value, previous) {
+  let ok = false;
+  try {
+    const resp = await fetch(`/eval/${ASSIGNMENT_ID}/rating`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question_id: qid, value }),
+    });
+    ok = resp.ok;
+  } catch (e) {
+    ok = false;
+  }
+  if (!ok) {
+    // Put the score back rather than leaving the page claiming a change that
+    // never reached the database.
+    ratedQuestions[qid] = previous;
+    paintRatingRow(qid, previous);
+    appendClaudeMessage("That score change didn't save. Please try again.", []);
+  }
+}
 
-  // Re-enable buttons
-  if (row) row.querySelectorAll('.rating-btn').forEach(b => b.disabled = false);
+function paintRatingRow(qid, value) {
+  const row = document.getElementById(`ratings-${qid}`);
+  if (!row) return;
+  row.querySelectorAll('.rating-btn').forEach(btn => {
+    const v = parseInt(btn.dataset.val);
+    const on = 'ring-2 ring-indigo-400 bg-indigo-600 text-white';
+    const off = 'bg-white text-gray-700 hover:bg-indigo-50';
+    btn.className = 'rating-btn w-9 h-9 rounded-full border border-gray-200 text-sm font-medium transition-all '
+                    + (v === value ? on : off);
+  });
 }
 
 // Rated questions map (pre-populated from server)
