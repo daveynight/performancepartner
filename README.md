@@ -22,7 +22,7 @@ An internal web app for running 360-degree employee evaluations at Partners In C
 | Database | SQLite (single file, no server needed) |
 | Templates | Jinja2 |
 | Styling | TailwindCSS (CDN) |
-| Interactivity | HTMX (CDN) |
+| Interactivity | Vanilla JS (`fetch`) |
 | Charts | Chart.js (CDN) |
 | AI Interview | Anthropic API — Claude Haiku |
 | Auth | bcrypt + itsdangerous signed session cookies |

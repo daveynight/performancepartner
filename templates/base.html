@@ -6,7 +6,6 @@
   <title>{% block title %}Performance Partner{% endblock %}</title>
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico"/>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -16,11 +15,6 @@
       }
     }
   </script>
-  <style>
-    [x-cloak] { display: none !important; }
-    .htmx-indicator { display: none; }
-    .htmx-request .htmx-indicator { display: inline; }
-  </style>
   {% block head %}{% endblock %}
 </head>
 <body class="bg-slate-50 min-h-screen text-gray-900 antialiased">

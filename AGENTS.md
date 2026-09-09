@@ -16,7 +16,7 @@ Default admin login: `hmis@partnersincareoahu.org` / `changeme`
 
 ## Architecture
 
-Single-file-per-concern FastAPI app. No ORM — raw SQLite via a thin `database.py` helper (`get_db()` context manager, `fetchone()`, `fetchall()`). Templates are Jinja2; interactivity is vanilla JS with `fetch()` (no HTMX despite the README mention). Tailwind is loaded from CDN.
+Single-file-per-concern FastAPI app. No ORM — raw SQLite via a thin `database.py` helper (`get_db()` context manager, `fetchone()`, `fetchall()`). Templates are Jinja2; interactivity is vanilla JS with `fetch()` — no front-end framework. Tailwind and Chart.js are loaded from CDN.
 
 **Request flow:**
 1. `main.py` — mounts routers, handles auth exceptions globally, runs startup hooks
